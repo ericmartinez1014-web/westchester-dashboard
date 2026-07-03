@@ -1,0 +1,808 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Westchester Miami — Market Dashboard v3</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+<style>
+:root{
+  --bg:#0f1117;--surface:#1a1d27;--surface2:#22263a;--border:#2a2e42;
+  --accent:#6c8ef5;--accent2:#4ecdc4;--accent3:#f7b731;--accent4:#ff6b6b;
+  --text:#e8eaf6;--muted:#8891b4;--green:#4caf50;--red:#f44336;
+  --font:'Inter',system-ui,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:100vh;font-size:14px}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+h1{font-size:1.6rem;font-weight:700}h2{font-size:1rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}
+.container{max-width:1400px;margin:0 auto;padding:0 20px}
+
+/* Header */
+#header{background:linear-gradient(135deg,#1a1d27 0%,#1e223a 100%);border-bottom:1px solid var(--border);padding:18px 0}
+#header .inner{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px}
+#header .badge{background:var(--accent);color:#fff;padding:3px 10px;border-radius:12px;font-size:.75rem;font-weight:700}
+#header .subtitle{color:var(--muted);font-size:.85rem;margin-top:4px}
+#filename-hint{background:var(--surface2);border:1px solid var(--border);padding:6px 14px;border-radius:8px;font-size:.8rem;color:var(--muted)}
+#filename-hint span{color:var(--accent3);font-weight:600}
+
+/* Upload bar */
+#upload-bar{background:var(--surface);border-bottom:1px solid var(--border);padding:14px 0}
+#upload-bar .inner{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+#upload-bar label{display:flex;align-items:center;gap:8px;cursor:pointer;background:var(--surface2);border:1px dashed var(--border);border-radius:8px;padding:8px 16px;transition:.2s}
+#upload-bar label:hover{border-color:var(--accent);color:var(--accent)}
+#upload-bar input[type=file]{display:none}
+#upload-status{font-size:.85rem;color:var(--muted)}
+#stale-banner{display:none;background:#2d1f00;border:1px solid var(--accent3);border-radius:8px;padding:8px 14px;font-size:.82rem;color:var(--accent3)}
+
+/* KPI strip */
+#kpi-strip{padding:20px 0}
+#kpi-strip .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px}
+.kpi-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px 18px;position:relative;overflow:hidden}
+.kpi-card::before{content:'';position:absolute;top:0;left:0;width:3px;height:100%;background:var(--accent)}
+.kpi-card.green::before{background:var(--green)}
+.kpi-card.red::before{background:var(--red)}
+.kpi-card.gold::before{background:var(--accent3)}
+.kpi-label{color:var(--muted);font-size:.75rem;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px}
+.kpi-value{font-size:1.55rem;font-weight:700;line-height:1}
+.kpi-sub{font-size:.75rem;color:var(--muted);margin-top:5px}
+
+/* Month filter */
+#month-filter{padding:0 0 20px}
+#month-filter .chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.chip{padding:5px 14px;border-radius:20px;border:1px solid var(--border);background:var(--surface);color:var(--muted);cursor:pointer;font-size:.8rem;transition:.15s}
+.chip:hover,.chip.active{background:var(--accent);border-color:var(--accent);color:#fff}
+.chip.all{background:var(--surface2)}
+
+/* MoM strip */
+#mom-strip{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px 20px;margin-bottom:24px}
+#mom-strip h2{margin-bottom:14px}
+.mom-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+.mom-cell{text-align:center}
+.mom-label{font-size:.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.mom-val{font-size:1.15rem;font-weight:700;margin:4px 0 2px}
+.mom-delta{font-size:.8rem}
+.up{color:var(--green)}.down{color:var(--red)}.neutral{color:var(--muted)}
+
+/* Affordability */
+#affordability{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:24px}
+#affordability h2{margin-bottom:16px}
+.afford-layout{display:grid;grid-template-columns:1fr 1fr;gap:24px}
+@media(max-width:700px){.afford-layout{grid-template-columns:1fr}}
+.afford-controls{}
+.control-row{margin-bottom:14px}
+.control-row label{display:block;font-size:.78rem;color:var(--muted);margin-bottom:5px;text-transform:uppercase;letter-spacing:.05em}
+.control-row input[type=range]{width:100%;accent-color:var(--accent);cursor:pointer}
+.control-row input[type=number]{background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:6px 10px;width:90px;font-size:.9rem}
+.dp-chips{display:flex;gap:6px;flex-wrap:wrap}
+.dp-chip{padding:4px 12px;border-radius:16px;border:1px solid var(--border);background:var(--surface2);color:var(--muted);cursor:pointer;font-size:.8rem;transition:.15s}
+.dp-chip.active{background:var(--accent);border-color:var(--accent);color:#fff}
+.term-toggle{display:flex;gap:6px}
+.term-btn{padding:5px 14px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--muted);cursor:pointer;font-size:.82rem;transition:.15s}
+.term-btn.active{background:var(--accent2);border-color:var(--accent2);color:#000;font-weight:600}
+.afford-output{background:var(--surface2);border-radius:10px;padding:16px}
+.piti-row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)}
+.piti-row:last-child{border-bottom:none;padding-top:12px;margin-top:4px}
+.piti-label{font-size:.82rem;color:var(--muted)}
+.piti-val{font-weight:600;font-size:1rem}
+.piti-total .piti-label{color:var(--text);font-weight:600;font-size:.9rem}
+.piti-total .piti-val{color:var(--accent3);font-size:1.25rem}
+.afford-note{font-size:.72rem;color:var(--muted);margin-top:10px;line-height:1.5}
+.price-ref{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+.price-ref-btn{padding:4px 10px;border-radius:6px;border:1px solid var(--border);background:var(--surface2);color:var(--muted);cursor:pointer;font-size:.78rem}
+.price-ref-btn:hover{border-color:var(--accent);color:var(--accent)}
+
+/* Charts */
+#charts{margin-bottom:24px}
+.charts-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.charts-grid-3{display:grid;grid-template-columns:2fr 1fr 1fr;gap:16px;margin-top:16px}
+@media(max-width:900px){.charts-grid,.charts-grid-3{grid-template-columns:1fr}}
+.chart-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px}
+.chart-card h3{font-size:.8rem;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px}
+.chart-card canvas{max-height:240px}
+
+/* DOM warning */
+#dom-banner{background:#1f1220;border:1px solid var(--accent4);border-radius:10px;padding:14px 18px;margin-bottom:24px;font-size:.83rem;line-height:1.6}
+#dom-banner strong{color:var(--accent4)}
+
+/* Table */
+#table-section{margin-bottom:24px}
+#table-controls{display:flex;gap:12px;margin-bottom:12px;flex-wrap:wrap;align-items:center}
+#search-input{background:var(--surface);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:8px 14px;width:220px;font-size:.85rem}
+#search-input::placeholder{color:var(--muted)}
+.table-wrap{overflow-x:auto;border-radius:10px;border:1px solid var(--border)}
+table{width:100%;border-collapse:collapse;font-size:.82rem}
+thead th{background:var(--surface2);padding:10px 12px;text-align:left;font-weight:600;color:var(--muted);font-size:.75rem;text-transform:uppercase;letter-spacing:.05em;position:sticky;top:0;cursor:pointer;white-space:nowrap;user-select:none}
+thead th:hover{color:var(--text)}
+thead th .sort-icon{margin-left:4px;opacity:.5}
+thead th.sort-asc .sort-icon::after{content:'▲'}
+thead th.sort-desc .sort-icon::after{content:'▼'}
+thead th:not(.sort-asc):not(.sort-desc) .sort-icon::after{content:'↕'}
+tbody tr{border-bottom:1px solid var(--border);transition:.1s}
+tbody tr:hover{background:var(--surface2)}
+tbody td{padding:9px 12px;white-space:nowrap}
+td.distressed{color:var(--accent3)}
+td.outlier-high{color:var(--accent4)}
+.badge-distressed{background:#2d2200;color:var(--accent3);border:1px solid var(--accent3);border-radius:4px;padding:1px 6px;font-size:.7rem;margin-left:4px}
+.table-footer{padding:10px 12px;background:var(--surface2);color:var(--muted);font-size:.78rem;border-top:1px solid var(--border)}
+
+/* Commentary */
+#commentary{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:24px;margin-bottom:24px}
+#commentary h2{margin-bottom:16px}
+.commentary-meta{font-size:.78rem;color:var(--muted);margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid var(--border)}
+.commentary-body{line-height:1.75;color:#cdd5f0}
+.commentary-body h3{color:var(--accent3);font-size:.95rem;margin:18px 0 6px;text-transform:uppercase;letter-spacing:.05em}
+.commentary-body p{margin-bottom:10px}
+
+/* Workflow */
+#workflow{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:18px;margin-bottom:24px;font-size:.82rem;color:var(--muted);line-height:1.7}
+#workflow h2{margin-bottom:10px;color:var(--muted)}
+#workflow ol{padding-left:18px}
+#workflow li{margin-bottom:6px}
+#workflow code{background:var(--bg);padding:1px 6px;border-radius:4px;font-size:.8rem;color:var(--accent2)}
+
+/* Misc */
+section{padding:0 0 4px}
+.section-head{margin-bottom:14px}
+.pill{display:inline-block;padding:2px 8px;border-radius:10px;font-size:.72rem;font-weight:600}
+.pill-green{background:#1a3a1f;color:var(--green)}
+.pill-red{background:#3a1a1a;color:var(--red)}
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div id="header">
+  <div class="container inner">
+    <div>
+      <div style="display:flex;align-items:center;gap:12px">
+        <h1>Westchester Miami</h1>
+        <span class="badge">v3</span>
+      </div>
+      <div class="subtitle">Closed Sales Dashboard &nbsp;·&nbsp; <span id="data-range">May 2025 – May 2026</span> &nbsp;·&nbsp; <span id="listing-count">171 listings</span></div>
+    </div>
+    <div id="filename-hint">Save as: <span>westchester_dashboard_v3_2025-05_2026-05.html</span></div>
+  </div>
+</div>
+
+<!-- UPLOAD BAR -->
+<div id="upload-bar">
+  <div class="container inner">
+    <label>
+      <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+      Upload new CSV to preview
+      <input type="file" id="csv-upload" accept=".csv">
+    </label>
+    <div id="upload-status">Drop a new Apify CSV to preview new listings — regenerate HTML with Claude to embed permanently.</div>
+    <div id="stale-banner">⚠️ New CSV loaded — preview only. Commentary reflects prior data. Regenerate with Claude to update dashboard.</div>
+  </div>
+</div>
+
+<!-- MAIN -->
+<div class="container" style="padding-top:20px">
+
+<!-- KPI STRIP -->
+<section id="kpi-strip">
+  <div class="grid" id="kpi-grid">
+    <div class="kpi-card"><div class="kpi-label">Total Closed</div><div class="kpi-value" id="kpi-total">—</div><div class="kpi-sub" id="kpi-months-sub">12 months</div></div>
+    <div class="kpi-card green"><div class="kpi-label">Median Price</div><div class="kpi-value" id="kpi-median">—</div><div class="kpi-sub">arm's-length sales</div></div>
+    <div class="kpi-card"><div class="kpi-label">Avg Price</div><div class="kpi-value" id="kpi-avg">—</div><div class="kpi-sub">arm's-length sales</div></div>
+    <div class="kpi-card gold"><div class="kpi-label">Avg $/Sq Ft</div><div class="kpi-value" id="kpi-ppsf">—</div><div class="kpi-sub">excl. outliers &gt;$1,500</div></div>
+    <div class="kpi-card"><div class="kpi-label">Total Volume</div><div class="kpi-value" id="kpi-volume">—</div><div class="kpi-sub">all sales</div></div>
+    <div class="kpi-card red"><div class="kpi-label">Price Cut %</div><div class="kpi-value" id="kpi-cut">—</div><div class="kpi-sub" id="kpi-cut-sub">of listings w/ price data</div></div>
+  </div>
+</section>
+
+<!-- MONTH FILTER -->
+<section id="month-filter">
+  <div class="section-head"><h2>Filter by Month</h2></div>
+  <div class="chips" id="month-chips"></div>
+</section>
+
+<!-- MOM STRIP -->
+<div id="mom-strip">
+  <h2>Month-over-Month &nbsp;<span style="font-size:.75rem;color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0" id="mom-label"></span></h2>
+  <div class="mom-grid" id="mom-grid"></div>
+</div>
+
+<!-- AFFORDABILITY -->
+<div id="affordability">
+  <h2>Affordability Snapshot</h2>
+  <div class="afford-layout">
+    <div class="afford-controls">
+      <div style="margin-bottom:10px">
+        <div style="font-size:.75rem;color:var(--muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:.05em">Quick price reference</div>
+        <div class="price-ref" id="price-ref-btns">
+          <button class="price-ref-btn" onclick="setAffordPrice(680000)">Median $680K</button>
+          <button class="price-ref-btn" onclick="setAffordPrice(711000)">Overall Med $711K</button>
+          <button class="price-ref-btn" onclick="setAffordPrice(750000)">$750K</button>
+          <button class="price-ref-btn" onclick="setAffordPrice(900000)">$900K</button>
+        </div>
+      </div>
+      <div class="control-row">
+        <label>Purchase Price: <strong id="price-display">$680,000</strong></label>
+        <input type="range" id="price-slider" min="300000" max="2000000" step="5000" value="680000" oninput="updateAfford()">
+      </div>
+      <div class="control-row">
+        <label>30-yr Rate (Freddie Mac Jun 11, 2026: 6.52%): <input type="number" id="rate-input" value="6.75" min="3" max="12" step="0.05" style="width:80px" oninput="updateAfford()"> %</label>
+        <input type="range" id="rate-slider" min="3" max="12" step="0.05" value="6.75" oninput="syncRate()">
+      </div>
+      <div class="control-row">
+        <label>Down Payment</label>
+        <div class="dp-chips" id="dp-chips">
+          <span class="dp-chip" data-pct="5" onclick="setDP(5)">5%</span>
+          <span class="dp-chip" data-pct="10" onclick="setDP(10)">10%</span>
+          <span class="dp-chip active" data-pct="20" onclick="setDP(20)">20%</span>
+          <span class="dp-chip" data-pct="25" onclick="setDP(25)">25%</span>
+          <span class="dp-chip" data-pct="30" onclick="setDP(30)">30%</span>
+        </div>
+      </div>
+      <div class="control-row">
+        <label>Loan Term</label>
+        <div class="term-toggle">
+          <button class="term-btn active" id="term30" onclick="setTerm(30)">30 yr</button>
+          <button class="term-btn" id="term15" onclick="setTerm(15)">15 yr</button>
+        </div>
+      </div>
+    </div>
+    <div class="afford-output">
+      <div class="piti-row"><span class="piti-label">Down Payment</span><span class="piti-val" id="out-dp">—</span></div>
+      <div class="piti-row"><span class="piti-label">Loan Amount</span><span class="piti-val" id="out-loan">—</span></div>
+      <div class="piti-row"><span class="piti-label">Monthly P&amp;I</span><span class="piti-val" id="out-pi">—</span></div>
+      <div class="piti-row"><span class="piti-label">Property Tax (est.)</span><span class="piti-val" id="out-tax">—</span></div>
+      <div class="piti-row"><span class="piti-label">Homeowners Ins. (est.)</span><span class="piti-val" id="out-ins">—</span></div>
+      <div class="piti-row piti-total"><span class="piti-label">Total PITI / month</span><span class="piti-val" id="out-piti">—</span></div>
+      <div class="afford-note">
+        Tax: Miami-Dade millage 16.9487 mills on 80% of sale price (new buyer, no homestead). 
+        Insurance: inland non-coastal SFH model (65% rebuild cost; base $5,500 at $300K dwelling + $8/additional $1K). 
+        Excludes flood insurance (~$800–$2,500/yr separate NFIP policy). 
+        Rate source: Freddie Mac PMMS May 7, 2026.
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- CHARTS -->
+<section id="charts">
+  <div class="section-head"><h2>Market Charts</h2></div>
+  <div class="charts-grid">
+    <div class="chart-card"><h3>Median &amp; Avg Sale Price</h3><canvas id="chart-price"></canvas></div>
+    <div class="chart-card"><h3>Sales Volume (Closed)</h3><canvas id="chart-volume"></canvas></div>
+  </div>
+  <div class="charts-grid-3">
+    <div class="chart-card"><h3>Avg Price / Sq Ft</h3><canvas id="chart-ppsf"></canvas></div>
+    <div class="chart-card"><h3>Price Distribution</h3><canvas id="chart-dist"></canvas></div>
+    <div class="chart-card"><h3>Beds Mix</h3><canvas id="chart-beds"></canvas></div>
+  </div>
+</section>
+
+<!-- DOM BANNER -->
+<div id="dom-banner">
+  <strong>⚠️ Days-on-Market Data Excluded</strong><br>
+  The <code>daysOnZillow</code> field from the Apify scraper is <strong>not valid for sold listings</strong>. It counts days from the listing date to the <em>scrape date</em> (May 1, 2026) — not to the sale date. A home that sold in June 2025 shows ~330 "days on market" simply because it was scraped 11 months later. This is a scraper calendar artifact. All DOM values are excluded from this dashboard. Do not use them for market timing analysis.
+</div>
+
+<!-- LISTINGS TABLE -->
+<section id="table-section">
+  <div class="section-head" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+    <h2>Listings <span id="table-count" style="color:var(--text);font-size:.95rem;font-weight:700"></span></h2>
+    <div id="table-controls">
+      <input type="text" id="search-input" placeholder="Search address, broker…" oninput="renderTable()">
+      <span style="font-size:.78rem;color:var(--muted)">Click column headers to sort</span>
+    </div>
+  </div>
+  <div class="table-wrap">
+    <table id="listings-table">
+      <thead>
+        <tr>
+          <th onclick="sortTable('Sale Date')" data-col="Sale Date">Date<span class="sort-icon"></span></th>
+          <th onclick="sortTable('Full Address')" data-col="Full Address">Address<span class="sort-icon"></span></th>
+          <th onclick="sortTable('Sold Price ($)')" data-col="Sold Price ($)">Price<span class="sort-icon"></span></th>
+          <th onclick="sortTable('Beds')" data-col="Beds">Bd<span class="sort-icon"></span></th>
+          <th onclick="sortTable('Baths')" data-col="Baths">Ba<span class="sort-icon"></span></th>
+          <th onclick="sortTable('Sq Ft')" data-col="Sq Ft">SqFt<span class="sort-icon"></span></th>
+          <th onclick="sortTable('Price/SqFt ($)')" data-col="Price/SqFt ($)">$/SqFt<span class="sort-icon"></span></th>
+          <th onclick="sortTable('Zestimate ($)')" data-col="Zestimate ($)">Zestimate<span class="sort-icon"></span></th>
+          <th onclick="sortTable('Price Change ($)')" data-col="Price Change ($)">Price Δ<span class="sort-icon"></span></th>
+          <th onclick="sortTable('Broker')" data-col="Broker">Broker<span class="sort-icon"></span></th>
+          <th>Link</th>
+        </tr>
+      </thead>
+      <tbody id="table-body"></tbody>
+    </table>
+    <div class="table-footer" id="table-footer"></div>
+  </div>
+</section>
+
+<!-- BROKER COMMENTARY -->
+<section id="commentary">
+  <h2>Broker Commentary</h2>
+  <div class="commentary-meta">
+    Frozen as of June 18, 2026 &nbsp;·&nbsp; Data: May 2025 – May 2026 &nbsp;·&nbsp; 188 closed sales &nbsp;·&nbsp; Westchester (unincorporated Miami-Dade, ZIPs 33144/33155/33165/33174)
+  </div>
+  <div class="commentary-body">
+    <h3>Verdict</h3>
+    <p>Westchester bounced in May 2026 — median up $90K month-over-month to $770K — but with only 11 closings, this is a thin-market recovery, not a trend reversal.</p>
+
+    <h3>What the Numbers Tell Me</h3>
+    <p>Across 188 closed sales from May 2025 through May 2026, the overall median sits at $710,000. Average is $756K, dragged up by two outliers: the $3.95M at 900 SW 80th Ct (April 2026 — development play, not a comp) and the $2.4M at 9330 SW 34th St (October 2025). Strip those two and you're looking at a median of $707,500 and avg of $730K — a market that's been trading in a tight $650K–$800K band for most of the year. At $417/sqft average, value density here remains compelling versus comparable Miami-Dade neighborhoods. Zestimate coverage is exceptional at 98% (184 of 188 listings), and the overall sale/zestimate delta is median 0.0% — sellers are getting exactly what Zillow models suggest, with an average delta of -1.7%. That tight spread tells you pricing is efficient, not wishful.</p>
+
+    <h3>Volume Trend and What It Means</h3>
+    <p>The year's arc: a solid summer (August and December each hit 21 closings, March 2026 reached 19), a brutal January 2026 low of 6 sales, and now a second consecutive month of thin volume — April 15, May 11. The spring rebound everyone expected didn't materialize. Rate lock is real: at 6.52% (PMMS June 11, 2026), a buyer putting 20% down on the $710K median is looking at $3,100/month P&amp;I before taxes and insurance. Total PITI runs around $4,300/month. That's a household income requirement north of $150K. The demand pool at that entry point is narrow, and it shows in the deal count.</p>
+
+    <h3>Are Sellers Getting Their Price?</h3>
+    <p>Yes, broadly — the 0.0% median sale/zestimate delta says sellers are landing right at the model. But Zestimate data for recent sales is often retroactively adjusted, so read that number as directional, not precise. The more telling signal is the price cut data: 19 of 188 listings (10.1%) recorded a price reduction, and every single confirmed cut is negative — no recorded increases. The average cut is meaningful. Sellers who priced for 2025 peak traffic got corrected by 2026 buyer psychology. List right and you close; list aspirationally and you're eating a cut.</p>
+
+    <h3>Price Cuts Analysis</h3>
+    <p>19 confirmed cuts out of 188 listings (10.1%), with the caveat that scraper coverage on this field is sparse — the real cut rate is likely higher. The two largest: 8881 SW 28 Street (-$95,001) and 7835 SW 17th St (-$90,000). Both of those are real adjustments, not cosmetic trims. A $90–95K reduction on a home in the $700K–$800K range is a 12–13% haircut — those sellers either mispriced badly at the start or sat too long waiting for a buyer who wasn't coming at the original number.</p>
+
+    <h3>What I'd Tell a Seller Right Now</h3>
+    <p>May's $770K median feels encouraging but don't read too much into 11 closings — that's noise. The underlying market is a $695K–$750K world for a standard 3/2 at 1,200–1,500 sqft. Price to the March–April comp range, not the May blip. Expect 3–5 weeks on market before a serious offer in the current rate environment, and build a 2–3% negotiation cushion into your ask rather than holding firm and going stale. If you're thinking of selling in the next 6 months, list now before summer softens traffic further — the June/July window historically sees fewer qualified buyers in South Florida's heat.</p>
+
+    <h3>What I'd Tell a Buyer Right Now</h3>
+    <p>Rate at 6.75% (with jumbo adjustment) on a $710K purchase with 20% down is a $3,700/month P&amp;I — real money. But negotiating leverage is the best it's been in years. April closings sat at 15, May at 11 — sellers know the pool is thin. Target listings 30+ days on market and come in 3–5% below ask; you'll get conversations. The two ZIPs I'd prioritize right now are 33165 and 33174 — they're showing the most consistent volume and tighter pricing, which means liquidity if you need to resell. Don't wait for a rate drop that may not come; instead, negotiate seller concessions toward a rate buydown at closing. That's where the value is right now.</p>
+  </div>
+</section>
+
+<!-- WORKFLOW -->
+<div id="workflow">
+  <h2>📋 Monthly Update Workflow</h2>
+  <ol>
+    <li>Run your Apify <strong>Zillow Search Scraper</strong> task for Westchester Miami, last 12 months filter, <em>detail scraper mode</em> (full <code>hdpData</code> output — not the lite search-results-only mode)</li>
+    <li>Export CSV named <code>zillow_westchester_YYYY-MM-DD.csv</code></li>
+    <li>Upload the CSV to Claude along with this HTML file</li>
+    <li>Claude deduplicates on ZPID, merges all months, regenerates this file with fresh commentary and updated mortgage rate</li>
+    <li>Save the new file as <code>westchester_dashboard_v3_2025-05_2026-05.html</code> (or whatever the new last month is)</li>
+  </ol>
+  <div style="margin-top:8px;color:var(--accent3)">⚠️ Apr 2025 data (from v1) was outside the 12-month rolling window of this scrape and is not in v3. Provide the v1 HTML file alongside future CSVs to preserve that month permanently.</div>
+</div>
+
+</div><!-- /container -->
+
+<script>
+// ============================================================
+// EMBEDDED DATA
+// ============================================================
+const BASE_DATA = [{"Full Address":"8125 SW 26th St, Miami, FL 33155","Street":"8125 SW 26th St","City":"Miami","State":"FL","ZIP Code":"33155","Beds":4,"Baths":5.0,"Sq Ft":2479,"Sale Date":"2025-05-01","Sale Month":"2025-05","Sold Price ($)":1100000.0,"Zestimate ($)":1090100,"Price Change ($)":null,"Price/SqFt ($)":444,"Broker":"Compass Florida, LLC","Zillow URL":"https://www.zillow.com/homedetails/8125-SW-26th-St-Miami-FL-33155/44191235_zpid/","ZPID":"44191235","Home Type":"SINGLE_FAMILY"},{"Full Address":"2100 SW 82nd Ct, Miami, FL 33155","Street":"2100 SW 82nd Ct","City":"Miami","State":"FL","ZIP Code":"33155","Beds":2,"Baths":1.0,"Sq Ft":1467,"Sale Date":"2025-05-01","Sale Month":"2025-05","Sold Price ($)":712000.0,"Zestimate ($)":701600,"Price Change ($)":null,"Price/SqFt ($)":485,"Broker":"","Zillow URL":"https://www.zillow.com/homedetails/2100-SW-82nd-Ct-Miami-FL-33155/44182272_zpid/","ZPID":"44182272","Home Type":"SINGLE_FAMILY"},{"Full Address":"7885 SW 36th St, Miami, FL 33155","Street":"7885 SW 36th St","City":"Miami","State":"FL","ZIP Code":"33155","Beds":3,"Baths":2.0,"Sq Ft":1880,"Sale Date":"2025-05-01","Sale Month":"2025-05","Sold Price ($)":705000.0,"Zestimate ($)":698700,"Price Change ($)":null,"Price/SqFt ($)":375,"Broker":"","Zillow URL":"https://www.zillow.com/homedetails/7885-SW-36th-St-Miami-FL-33155/44191696_zpid/","ZPID":"44191696","Home Type":"SINGLE_FAMILY"},{"Full Address":"7970 SW 37th Ter, Miami, FL 33155","Street":"7970 SW 37th Ter","City":"Miami","State":"FL","ZIP Code":"33155","Beds":5,"Baths":3.0,"Sq Ft":2739,"Sale Date":"2025-05-01","Sale Month":"2025-05","Sold Price ($)":824000.0,"Zestimate ($)":816600,"Price Change ($)":null,"Price/SqFt ($)":301,"Broker":"","Zillow URL":"https://www.zillow.com/homedetails/7970-SW-37th-Ter-Miami-FL-33155/44191822_zpid/","ZPID":"44191822","Home Type":"SINGLE_FAMILY"},{"Full Address":"8300 SW 30th St, Miami, FL 33155","Street":"8300 SW 30th St","City":"Miami","State":"FL","ZIP Code":"33155","Beds":3,"Baths":2.0,"Sq Ft":1100,"Sale Date":"2025-05-01","Sale Month":"2025-05","Sold Price ($)":715000.0,"Zestimate ($)":708600,"Price Change ($)":null,"Price/SqFt ($)":650,"Broker":"Compass Florida, LLC","Zillow URL":"https://www.zillow.com/homedetails/8300-SW-30th-St-Miami-FL-33155/44191113_zpid/","ZPID":"44191113","Home Type":"SINGLE_FAMILY"},{"Full Address":"1821 SW 93rd Pl, Miami, FL 33165","Street":"1821 SW 93rd Pl","City":"Miami","State":"FL","ZIP Code":"33165","Beds":3,"Baths":3.0,"Sq Ft":2084,"Sale Date":"2025-05-01","Sale Month":"2025-05","Sold Price ($)":890000.0,"Zestimate ($)":877000,"Price Change ($)":null,"Price/SqFt ($)":427,"Broker":"Realty Investments Corp.","Zillow URL":"https://www.zillow.com/homedetails/1821-SW-93rd-Pl-Miami-FL-33165/44180943_zpid/","ZPID":"44180943","Home Type":"SINGLE_FAMILY"},{"Full Address":"3635 SW 87th Pl, Miami, FL 33165","Street":"3635 SW 87th Pl","City":"Miami","State":"FL","ZIP Code":"33165","Beds":4,"Baths":2.0,"Sq Ft":1407,"Sale Date":"2025-05-02","Sale Month":"2025-05","Sold Price ($)":642000.0,"Zestimate ($)":636300,"Price Change ($)":null,"Price/SqFt ($)":456,"Broker":"Genesis Realty Services Inc.","Zillow URL":"https://www.zillow.com/homedetails/3635-SW-87th-Pl-Miami-FL-33165/44193664_zpid/","ZPID":"44193664","Home Type":"SINGLE_FAMILY"},{"Full Address":"7820 SW 33rd Ter, Miami, FL 33155","Street":"7820 SW 33rd Ter","City":"Miami","State":"FL","ZIP Code":"33155","Beds":3,"Baths":2.0,"Sq Ft":1271,"Sale Date":"2025-05-05","Sale Month":"2025-05","Sold Price ($)":739000.0,"Zestimate ($)":732600,"Price Change ($)":null,"Price/SqFt ($)":581,"Broker":"Luxe Properties","Zillow URL":"https://www.zillow.com/homedetails/7820-SW-33rd-Ter-Miami-FL-33155/44192176_zpid/","ZPID":"44192176","Home Type":"SINGLE_FAMILY"},{"Full Address":"8310 SW 28th St, Miami, FL 33155","Street":"8310 SW 28th St","City":"Miami","State":"FL","ZIP Code":"33155","Beds":6,"Baths":4.0,"Sq Ft":2765,"Sale Date":"2025-05-06","Sale Month":"2025-05","Sold Price ($)":955000.0,"Zestimate ($)":946800,"Price Change ($)":null,"Price/SqFt ($)":345,"Broker":"Miami New Realty","Zillow URL":"https://www.zillow.com/homedetails/8310-SW-28th-St-Miami-FL-33155/44191050_zpid/","ZPID":"44191050","Home Type":"SINGLE_FAMILY"},{"Full Address":"1740 SW 92nd Ct, Miami, FL 33165","Street":"1740 SW 92nd Ct","City":"Miami","State":"FL","ZIP Code":"33165","Beds":3,"Baths":2.0,"Sq Ft":1571,"Sale Date":"2025-05-09","Sale Month":"2025-05","Sold Price ($)":695000.0,"Zestimate ($)":685200,"Price Change ($)":-15000,"Price/SqFt ($)":442,"Broker":"Keller Williams Capital Realty","Zillow URL":"https://www.zillow.com/homedetails/1740-SW-92nd-Ct-Miami-FL-33165/44180907_zpid/","ZPID":"44180907","Home Type":"SINGLE_FAMILY"},{"Full Address":"1210 SW 91st Ave, Miami, FL 33174","Street":"1210 SW 91st Ave","City":"Miami","State":"FL","ZIP Code":"33174","Beds":3,"Baths":2.0,"Sq Ft":1751,"Sale Date":"2025-05-09","Sale Month":"2025-05","Sold Price ($)":620000.0,"Zestimate ($)":611300,"Price Change ($)":null,"Price/SqFt ($)":354,"Broker":"Floridian First Realty Corp","Zillow URL":"https://www.zillow.com/homedetails/1210-SW-91st-Ave-Miami-FL-33174/44181078_zpid/","ZPID":"44181078","Home Type":"SINGLE_FAMILY"},{"Full Address":"9111 SW 12th St, Miami, FL 33174","Street":"9111 SW 12th St","City":"Miami","State":"FL","ZIP Code":"33174","Beds":4,"Baths":4.0,"Sq Ft":1754,"Sale Date":"2025-05-09","Sale Month":"2025-05","Sold Price ($)":780000.0,"Zestimate ($)":769100,"Price Change ($)":null,"Price/SqFt ($)":445,"Broker":"Luxe Properties","Zillow URL":"https://www.zillow.com/homedetails/9111-SW-12th-St-Miami-FL-33174/44181716_zpid/","ZPID":"44181716","Home Type":"SINGLE_FAMILY"},{"Full Address":"1411 SW 82nd Ct, Miami, FL 33144","Street":"1411 SW 82nd Ct","City":"Miami","State":"FL","ZIP Code":"33144","Beds":4,"Baths":2.0,"Sq Ft":1722,"Sale Date":"2025-05-12","Sale Month":"2025-05","Sold Price ($)":700000.0,"Zestimate ($)":772500,"Price Change ($)":null,"Price/SqFt ($)":407,"Broker":"The Keyes Company","Zillow URL":"https://www.zillow.com/homedetails/1411-SW-82nd-Ct-Miami-FL-33144/44182536_zpid/","ZPID":"44182536","Home Type":"SINGLE_FAMILY"},{"Full Address":"9633 SW 11th Ter, Miami, FL 33174","Street":"9633 SW 11th Ter","City":"Miami","State":"FL","ZIP Code":"33174","Beds":4,"Baths":3.0,"Sq Ft":2285,"Sale Date":"2025-05-15","Sale Month":"2025-05","Sold Price ($)":950000.0,"Zestimate ($)":937100,"Price Change ($)":null,"Price/SqFt ($)":416,"Broker":"All American Realty LLC","Zillow URL":"https://www.zillow.com/homedetails/9633-SW-11th-Ter-Miami-FL-33174/44181234_zpid/","ZPID":"44181234","Home Type":"SINGLE_FAMILY"},{"Full Address":"9228 SW 37th St, Miami, FL 33165","Street":"9228 SW 37th St","City":"Miami","State":"FL","ZIP Code":"33165","Beds":6,"Baths":3.0,"Sq Ft":2284,"Sale Date":"2025-05-27","Sale Month":"2025-05","Sold Price ($)":860000.0,"Zestimate ($)":895200,"Price Change ($)":null,"Price/SqFt ($)":377,"Broker":"Realty One Group Evolution","Zillow URL":"https://www.zillow.com/homedetails/9228-SW-37th-St-Miami-FL-33165/44193440_zpid/","ZPID":"44193440","Home Type":"SINGLE_FAMILY"},{"Full Address":"8930 SW 19th St, Miami, FL 33165","Street":"8930 SW 19th St","City":"Miami","State":"FL","ZIP Code":"33165","Beds":4,"Baths":2.0,"Sq Ft":1978,"Sale Date":"2025-05-27","Sale Month":"2025-05","Sold Price ($)":695000.0,"Zestimate ($)":686200,"Price Change ($)":null,"Price/SqFt ($)":351,"Broker":"EXP Realty LLC","Zillow URL":"https://www.zillow.com/homedetails/8930-SW-19th-St-Miami-FL-33165/44180729_zpid/","ZPID":"44180729","Home Type":"SINGLE_FAMILY"},{"Full Address":"7860 SW 33rd Ter, Miami, FL 33155","Street":"7860 SW 33rd Ter","City":"Miami","State":"FL","ZIP Code":"33155","Beds":3,"Baths":2.0,"Sq Ft":1541,"Sale Date":"2025-06-06","Sale Month":"2025-06","Sold Price ($)":675000.0,"Zestimate ($)":670900,"Price Change ($)":null,"Price/SqFt ($)":438,"Broker":"","Zillow URL":"https://www.zillow.com/homedetails/7860-SW-33rd-Ter-Miami-FL-33155/44192172_zpid/","ZPID":"44192172","Home Type":"SINGLE_FAMILY"},{"Full Address":"9441 SW 26th Dr, Miami, FL 33165","Street":"9441 SW 26th Dr","City":"Miami","State":"FL","ZIP Code":"33165","Beds":3,"Baths":2.0,"Sq Ft":1728,"Sale Date":"2025-06-09","Sale Month":"2025-06","Sold Price ($)":710000.0,"Zestimate ($)":925100,"Price Change ($)":null,"Price/SqFt ($)":411,"Broker":"Fortune Christie's Intl R.E.","Zillow URL":"https://www.zillow.com/homedetails/9441-SW-26th-Dr-Miami-FL-33165/44194322_zpid/","ZPID":"44194322","Home Type":"SINGLE_FAMILY"},{"Full Address":"8451 SW 12th Ter, Miami, FL 33144","Street":"8451 SW 12th Ter","City":"Miami","State":"FL","ZIP Code":"33144","Beds":3,"Baths":2.0,"Sq Ft":2184,"Sale Date":"2025-06-13","Sale Month":"2025-06","Sold Price ($)":799900.0,"Zestimate ($)":790800,"Price Change ($)":-50000,"Price/SqFt ($)":366,"Broker":"Vreeland Real Estate LLC","Zillow URL":"https://www.zillow.com/homedetails/8451-SW-12th-Ter-Miami-FL-33144/44183754_zpid/","ZPID":"44183754","Home Type":"SINGLE_FAMILY"},{"Full Address":"3030 SW 77th Ct, Miami, FL 33155","Street":"3030 SW 77th Ct","City":"Miami","State":"FL","ZIP Code":"33155","Beds":4,"Baths":2.0,"Sq Ft":1888,"Sale Date":"2025-06-16","Sale Month":"2025-06","Sold Price ($)":760000.0,"Zestimate ($)":756000,"Price Change ($)":null,"Price/SqFt ($)":403,"Broker":"Coldwell Banker Realty","Zillow URL":"https://www.zillow.com/homedetails/3030-SW-77th-Ct-Miami-FL-33155/44192441_zpid/","ZPID":"44192441","Home Type":"SINGLE_FAMILY"},{"Full Address":"2425 SW 82nd Ave, Miami, FL 33155","Street":"2425 SW 82nd Ave","City":"Miami","State":"FL","ZIP Code":"33155","Beds":3,"Baths":1.0,"Sq Ft":1320,"Sale Date":"2025-06-17","Sale Month":"2025-06","Sold Price ($)":985000.0,"Zestimate ($)":null,"Price Change ($)":null,"Price/SqFt ($)":746,"Broker":"","Zillow URL":"https://www.zillow.com/homedetails/2425-SW-82nd-Ave-Miami-FL-33155/44191231_zpid/","ZPID":"44191231","Home Type":"SINGLE_FAMILY"},{"Full Address":"7891 SW 9th Ter, Miami, FL 33144","Street":"7891 SW 9th Ter","City":"Miami","State":"FL","ZIP Code":"33144","Beds":3,"Baths":3.0,"Sq Ft":1752,"Sale Date":"2025-06-23","Sale Month":"2025-06","Sold Price ($)":650000.0,"Zestimate ($)":643100,"Price Change ($)":null,"Price/SqFt ($)":371,"Broker":"EXP Realty LLC","Zillow URL":"https://www.zillow.com/homedetails/7891-SW-9th-Ter-Miami-FL-33144/44184119_zpid/","ZPID":"44184119","Home Type":"SINGLE_FAMILY"},{"Full Address":"1735 SW 83rd Ct, Miami, FL 33155","Street":"1735 SW 83rd Ct","City":"Miami","State":"FL","ZIP Code":"33155","Beds":4,"Baths":2.0,"Sq Ft":1415,"Sale Date":"2025-06-24","Sale Month":"2025-06","Sold Price ($)":150000.0,"Zestimate ($)":148400,"Price Change ($)":null,"Price/SqFt ($)":106,"Broker":"","Zillow URL":"https://www.zillow.com/homedetails/1735-SW-83rd-Ct-Miami-FL-33155/44182635_zpid/","ZPID":"44182635","Home Type":"SINGLE_FAMILY"},{"Full Address":"1321 SW 84th Ct, Miami, FL 33144","Street":"1321 SW 84th Ct","City":"Miami","State":"FL","ZIP Code":"33144","Beds":5,"Baths":4.0,"Sq Ft":2385,"Sale Date":"2025-06-25","Sale Month":"2025-06","Sold Price ($)":970000.0,"Zestimate ($)":959900,"Price Change ($)":null,"Price/SqFt ($)":407,"Broker":"Strike Realty LLC","Zillow URL":"https://www.zillow.com/homedetails/1321-SW-84th-Ct-Miami-FL-33144/44183900_zpid/","ZPID":"44183900","Home Type":"SINGLE_FAMILY"},{"Full Address":"845 SW 94th Ct, Miami, FL 33174","Street":"845 SW 94th Ct","City":"Miami","State":"FL","ZIP Code":"33174","Beds":4,"Baths":3.0,"Sq Ft":2585,"Sale Date":"2025-06-25","Sale Month":"2025-06","Sold Price ($)":845000.0,"Zestimate ($)":841200,"Price Change ($)":null,"Price/SqFt ($)":327,"Broker":"Florida Prime Real Estate LLC","Zillow URL":"https://www.zillow.com/homedetails/845-SW-94th-Ct-Miami-FL-33174/44182127_zpid/","ZPID":"44182127","Home Type":"SINGLE_FAMILY"},{"Full Address":"1825 SW 86th Ave, Miami, FL 33155","Street":"1825 SW 86th Ave","City":"Miami","State":"FL","ZIP Code":"33155","Beds":4,"Baths":3.0,"Sq Ft":2031,"Sale Date":"2025-06-26","Sale Month":"2025-06","Sold Price ($)":800000.0,"Zestimate ($)":1014900,"Price Change ($)":null,"Price/SqFt ($)":394,"Broker":"Real Estate Sales Force","Zillow URL":"https://www.zillow.com/homedetails/1825-SW-86th-Ave-Miami-FL-33155/44183502_zpid/","ZPID":"44183502","Home Type":"SINGLE_FAMILY"},{"Full Address":"7772 SW 35th Ter, Miami, FL 33155","Street":"7772 SW 35th Ter","City":"Miami","State":"FL","ZIP Code":"33155","Beds":3,"Baths":2.0,"Sq Ft":1200,"Sale Date":"2025-06-26","Sale Month":"2025-06","Sold Price ($)":605000.0,"Zestimate ($)":602300,"Price Change ($)":null,"Price/SqFt ($)":504,"Broker":"Keller Williams Realty SW","Zillow URL":"https://www.zillow.com/homedetails/7772-SW-35th-Ter-Miami-FL-33155/44191706_zpid/","ZPID":"44191706","Home Type":"SINGLE_FAMILY"},{"Full Address":"7900 SW 36th St, Miami, FL 33155","Street":"7900 SW 36th St","City":"Miami","State":"FL","ZIP Code":"33155","Beds":4,"Baths":3.0,"Sq Ft":1540,"Sale Date":"2025-06-27","Sale Month":"2025-06","Sold Price ($)":725000.0,"Zestimate ($)":721900,"Price Change ($)":-25000,"Price/SqFt ($)":471,"Broker":"American Caribbean Real Estate","Zillow URL":"https://www.zillow.com/homedetails/7900-SW-36th-St-Miami-FL-33155/44191784_zpid/","ZPID":"44191784","Home Type":"SINGLE_FAMILY"},{"Full Address":"7731 SW 19th St, Miami, FL 33155","Street":"7731 SW 19th St","City":"Miami","State":"FL","ZIP Code":"33155","Beds":4,"Baths":3.0,"Sq Ft":2122,"Sale Date":"2025-06-30","Sale Month":"2025-06","Sold Price ($)":680000.0,"Zestimate ($)":673200,"Price Change ($)":null,"Price/SqFt ($)":320,"Broker":"Luxe Properties","Zillow URL":"https://www.zillow.com/homedetails/7731-SW-19th-St-Miami-FL-33155/44183346_zpid/","ZPID":"44183346","Home Type":"SINGLE_FAMILY"},{"Full Address":"8980 SW 12th St, Miami, FL 33174","Street":"8980 SW 12th St","City":"Miami","State":"FL","ZIP Code":"33174","Beds":5,"Baths":3.0,"Sq Ft":2335,"Sale Date":"2025-06-30","Sale Month":"2025-06","Sold Price ($)":835000.0,"Zestimate ($)":826600,"Price Change ($)":-19000,"Price/SqFt ($)":358,"Broker":"Global Vanguard International, LLC.","Zillow URL":"https://www.zillow.com/homedetails/8980-SW-12th-St-Miami-FL-33174/44181267_zpid/","ZPID":"44181267","Home Type":"SINGLE_FAMILY"},{"Full Address":"3715 SW 86th Ave, Miami, FL 33155","Street":"3715 SW 86th Ave","City":"Miami","State":"FL","ZIP Code":"33155","Beds":3,"Baths":2.0,"Sq Ft":1270,"Sale Date":"2025-07-01","Sale Month":"2025-07","Sold Price ($)":740000.0,"Zestimate ($)":737000,"Price Change ($)":null,"Price/SqFt ($)":583,"Broker":"Sunview Realty","Zillow URL":"https://www.zillow.com/homedetails/3715-SW-86th-Ave-Miami-FL-33155/44191539_zpid/","ZPID":"44191539","Home Type":"SINGLE_FAMILY"},{"Full Address":"8835 SW 27th St, Miami, FL 33165","Street":"8835 SW 27th St","City":"Miami","State":"FL","ZIP Code":"33165","Beds":4,"Baths":3.0,"Sq Ft":2111,"Sale Date":"2025-07-03","Sale Month":"2025-07","Sold Price ($)":782000.0,"Zestimate ($)":910300,"Price Change ($)":null,"Price/SqFt ($)":370,"Broker":"","Zillow URL":"https://www.zillow.com/homedetails/8835-SW-27th-St-Miami-FL-33165/44193235_zpid/","ZPID":"44193235","Home Type":"SINGLE_FAMILY"},{"Full Address":"1320 SW 84th Ct, Miami, FL 33144","Street":"1320 SW 84th Ct","City":"Miami","State":"FL","ZIP Code":"33144","Beds":3,"Baths":2.0,"Sq Ft":1326,"Sale Date":"2025-07-07","Sale Month":"2025-07","Sold Price ($)":649000.0,"Zestimate ($)":642800,"Price Change ($)":null,"Price/SqFt ($)":489,"Broker":"RE/MAX Select Group","Zillow URL":"https://www.zillow.com/homedetails/1320-SW-84th-Ct-Miami-FL-33144/44183687_zpid/","ZPID":"44183687","Home Type":"SINGLE_FAMILY"},{"Full Address":"2311 SW 89th Ct, Miami, FL 33165","Street":"2311 SW 89th Ct","City":"Miami","State":"FL","ZIP Code":"33165","Beds":3,"Baths":3.0,"Sq Ft":2031,"Sale Date":"2025-07-07","Sale Month":"2025-07","Sold Price ($)":859000.0,"Zestimate ($)":850800,"Price Change ($)":null,"Price/SqFt ($)":423,"Broker":"Real Estate Sales Force","Zillow URL":"https://www.zillow.com/homedetails/2311-SW-89th-Ct-Miami-FL-33165/44180429_zpid/","ZPID":"44180429","Home Type":"SINGLE_FAMILY"},{"Full Address":"7941 SW 37th Ter, Miami, FL 33155","Street":"7941 SW 37th Ter","City":"Miami","State":"FL","ZIP Code":"33155","Beds":3,"Baths":2.0,"Sq Ft":1446,"Sale Date":"2025-07-09","Sale Month":"2025-07","Sold Price ($)":500000.0,"Zestimate ($)":750500,"Price Change ($)":null,"Price/SqFt ($)":346,"Broker":"","Zillow URL":"https://www.zillow.com/homedetails/7941-SW-37th-Ter-Miami-FL-33155/44191812_zpid/","ZPID":"44191812","Home Type":"SINGLE_FAMILY"},{"Full Address":"3035 SW 78th Ave, Miami, FL 33155","Street":"3035 SW 78th Ave","City":"Miami","State":"FL","ZIP Code":"33155","Beds":4,"Baths":3.0,"Sq Ft":1932,"Sale Date":"2025-07-14","Sale Month":"2025-07","Sold Price ($)":830000.0,"Zestimate ($)":827500,"Price Change ($)":-50887,"Price/SqFt ($)":430,"Broker":"Lifestyle International Realty","Zillow URL":"https://www.zillow.com/homedetails/3035-SW-78th-Ave-Miami-FL-33155/44192424_zpid/","ZPID":"44192424","Home Type":"SINGLE_FAMILY"},{"Full Address":"2161 SW 87th Ct, Miami, FL 33165","Street":"2161 SW 87th Ct","City":"Miami","State":"FL","ZIP Code":"33165","Beds":4,"Baths":2.0,"Sq Ft":1242,"Sale Date":"2025-07-16","Sale Month":"2025-07","Sold Price ($)":740000.0,"Zestimate ($)":733500,"Price Change ($)":null,"Price/SqFt ($)":596,"Broker":"Riviera Realty Associates Inc","Zillow URL":"https://www.zillow.com/homedetails/2161-SW-87th-Ct-Miami-FL-33165/44180777_zpid/","ZPID":"44180777","Home Type":"SINGLE_FAMILY"},{"Full Address":"1225 SW 87th Ave, Miami, FL 33174","Street":"1225 SW 87th Ave","City":"Miami","State":"FL","ZIP Code":"33174","Beds":3,"Baths":1.0,"Sq Ft":2769,"Sale Date":"2025-07-24","Sale Month":"2025-07","Sold Price ($)":955000.0,"Zestimate ($)":1089800,"Price Change ($)":null,"Price/SqFt ($)":345,"Broker":"","Zillow URL":"https://www.zillow.com/homedetails/1225-SW-87th-Ave-Miami-FL-33174/44182717_zpid/","ZPID":"44182717","Home Type":"SINGLE_FAMILY"},{"Full Address":"7811 SW 9th Ter, Miami, FL 33144","Street":"7811 SW 9th Ter","City":"Miami","State":"FL","ZIP Code":"33144","Beds":4,"Baths":3.0,"Sq Ft":1752,"Sale Date":"2025-07-29","Sale Month":"2025-07","Sold Price ($)":625000.0,"Zestimate ($)":623900,"Price Change ($)":null,"Price/SqFt ($)":357,"Broker":"RE/MAX Advance Realty","Zillow URL":"https://www.zillow.com/homedetails/7811-SW-9th-Ter-Miami-FL-33144/44184127_zpid/","ZPID":"44184127","Home Type":"SINGLE_FAMILY"},{"Full Address":"1120 SW 96th Ave, Miami, FL 33174","Street":"1120 SW 96th Ave","City":"Miami","State":"FL","ZIP Code":"33174","Beds":4,"Baths":3.0,"Sq Ft":2206,"Sale Date":"2025-07-29","Sale Month":"2025-07","Sold Price ($)":869000.0,"Zestimate ($)":862200,"Price Change ($)":null,"Price/SqFt ($)":394,"Broker":"","Zillow URL":"https://www.zillow.com/homedetails/1120-SW-96th-Ave-Miami-FL-33174/44181249_zpid/","ZPID":"44181249","Home Type":"SINGLE_FAMILY"},{"Full Address":"3515 SW 91st Ave, Miami, FL 33165","Street":"3515 SW 91st Ave","City":"Miami","State":"FL","ZIP Code":"33165","Beds":3,"Baths":2.0,"Sq Ft":2323,"Sale Date":"2025-08-04","Sale Month":"2025-08","Sold Price ($)":830000.0,"Zestimate ($)":909700,"Price Change ($)":null,"Price/SqFt ($)":357,"Broker":"","Zillow URL":"https://www.zillow.com/homedetails/3515-SW-91st-Ave-Miami-FL-33165/44193031_zpid/","ZPID":"44193031","Home Type":"SINGLE_FAMILY"},{"Full Address":"9211 SW 20th St, Miami, FL 33165","Street":"9211 SW 20th St","City":"Miami","State":"FL","ZIP Code":"33165","Beds":3,"Baths":3.0,"Sq Ft":1945,"Sale Date":"2025-08-05","Sale Month":"2025-08","Sold Price ($)":900000.0,"Zestimate ($)":893400,"Price Change ($)":null,"Price/SqFt ($)":463,"Broker":"Coldwell Banker Realty","Zillow URL":"https://www.zillow.com/homedetails/9211-SW-20th-St-Miami-FL-33165/44180887_zpid/","ZPID":"44180887","Home Type":"SINGLE_FAMILY"},{"Full Address":"8271 SW 31st St, Miami, FL 33155","Street":"8271 SW 31st St","City":"Miami","State":"FL","ZIP Code":"33155","Beds":3,"Baths":2.0,"Sq Ft":1359,"Sale Date":"2025-08-06","Sale Month":"2025-08","Sold Price ($)":97000.0,"Zestimate ($)":620900,"Price Change ($)":null,"Price/SqFt ($)":71,"Broker":"","Zillow URL":"https://www.zillow.com/homedetails/8271-SW-31st-St-Miami-FL-33155/44191123_zpid/","ZPID":"44191123","Home Type":"SINGLE_FAMILY"},{"Full Address":"7860 SW 17th St, Miami, FL 33155","Street":"7860 SW 17th St","City":"Miami","State":"FL","ZIP Code":"33155","Beds":5,"Baths":3.0,"Sq Ft":2028,"Sale Date":"2025-08-08","Sale Month":"2025-08","Sold Price ($)":775000.0,"Zestimate ($)":769500,"Price Change ($)":null,"Price/SqFt ($)":382,"Broker":"My Realty Group, LLC.","Zillow URL":"https://www.zillow.com/homedetails/7860-SW-17th-St-Miami-FL-33155/44183126_zpid/","ZPID":"44183126","Home Type":"SINGLE_FAMILY"},{"Full Address":"3500 SW 94th Ave, Miami, FL 33165","Street":"3500 SW 94th Ave","City":"Miami","State":"FL","ZIP Code":"33165","Beds":5,"Baths":4.0,"Sq Ft":2763,"Sale Date":"2025-08-11","Sale Month":"2025-08","Sold Price ($)":1200000.0,"Zestimate ($)":1433500,"Price Change ($)":null,"Price/SqFt ($)":434,"Broker":"","Zillow URL":"https://www.zillow.com/homedetails/3500-SW-94th-Ave-Miami-FL-33165/44194008_zpid/","ZPID":"44194008","Home Type":"SINGLE_FAMILY"},{"Full Address":"8441 SW 21st St, Miami, FL 33155","Street":"8441 SW 21st St","City":"Miami","State":"FL","ZIP Code":"33155","Beds":5,"Baths":4.0,"Sq Ft":2560,"Sale Date":"2025-08-11","Sale Month":"2025-08","Sold Price ($)":975000.0,"Zestimate ($)":968300,"Price Change ($)":null,"Price/SqFt ($)":381,"Broker":"Real Estate TeamMates","Zillow URL":"https://www.zillow.com/homedetails/8441-SW-21st-St-Miami-FL-33155/44182896_zpid/","ZPID":"44182896","Home Type":"SINGLE_FAMILY"},{"Full Address":"8271 SW 27th Ln, Miami, FL 33155","Street":"8271 SW 27th Ln","City":"Miami","State":"FL","ZIP Code":"33155","Beds":3,"Baths":2.0,"Sq Ft":1386,"Sale Date":"2025-08-11","Sale Month":"2025-08","Sold Price ($)":309200.0,"Zestimate ($)":724200,"Price Change ($)":null,"Price/SqFt ($)":223,"Broker":"","Zillow URL":"https://www.zillow.com/homedetails/8271-SW-27th-Ln-Miami-FL-33155/44190995_zpid/","ZPID":"44190995","Home Type":"SINGLE_FAMILY"},{"Full Address":"9101 SW 11th St, Miami, FL 33174","Street":"9101 SW 11th St","City":"Miami","State":"FL","ZIP Code":"33174","Beds":4,"Baths":3.0,"Sq Ft":2039,"Sale Date":"2025-08-13","Sale Month":"2025-08","Sold Price ($)":935000.0,"Zestimate ($)":928700,"Price Change ($)":-40000,"Price/SqFt ($)":459,"Broker":"LPT Realty, LLC","Zillow URL":"https://www.zillow.com/homedetails/9101-SW-11th-St-Miami-FL-33174/44181703_zpid/","ZPID":"44181703","Home Type":"SINGLE_FAMILY"},{"Full Address":"9627 SW 18th Ter, Miami, FL 33165","Street":"9627 SW 18th Ter","City":"Miami","State":"FL","ZIP Code":"33165","Beds":4,"Baths":3.0,"Sq Ft":2362,"Sale Date":"2025-08-13","Sale Month":"2025-08","Sold Price ($)":840000.0,"Zestimate ($)":551300,"Price Change ($)":null,"Price/SqFt ($)":356,"Broker":"New Way Realty Group","Zillow URL":"https://www.zillow.com/homedetails/9627-SW-18th-Ter-Miami-FL-33165/44181269_zpid/","ZPID":"44181269","Home Type":"SINGLE_FAMILY"},{"Full Address":"8953 SW 27th St, Miami, FL 33165","Street":"8953 SW 27th St","City":"Miami","State":"FL","ZIP Code":"33165","Beds":4,"Baths":3.0,"Sq Ft":1764,"Sale Date":"2025-08-13","Sale Month":"2025-08","Sold Price ($)":773500.0,"Zestimate ($)":772900,"Price Change ($)":null,"Price/SqFt ($)":438,"Broker":"","Zillow URL":"https://www.zillow.com/homedetails/8953-SW-27th-St-Miami-FL-33165/44193251_zpid/","ZPID":"44193251","Home Type":"SINGLE_FAMILY"},{"Full Address":"2920 SW 79th Ave, Miami, FL 33155","Street":"2920 SW 79th Ave","City":"Miami","State":"FL","ZIP Code":"33155","Beds":3,"Baths":1.0,"Sq Ft":2442,"Sale Date":"2025-08-14","Sale Month":"2025-08","Sold Price ($)":600000.0,"Zestimate ($)":926800,"Price Change ($)":null,"Price/SqFt ($)":246,"Broker":"","Zillow URL":"https://www.zillow.com/homedetails/2920-SW-79th-Ave-Miami-FL-33155/44191391_zpid/","ZPID":"44191391","Home Type":"SINGLE_FAMILY"},{"Full Address":"8940 SW 20th St, Miami, FL 33165","Street":"8940 SW 20th St","City":"Miami","State":"FL","ZIP Code":"33165","Beds":4,"Baths":2.0,"Sq Ft":1539,"Sale Date":"2025-08-15","Sale Month":"2025-08","Sold Price ($)":730000.0,"Zestimate ($)":814300,"Price Change ($)":null,"Price/SqFt ($)":474,"Broker":"Luxe Properties","Zillow URL":"https://www.zillow.com/homedetails/8940-SW-20th-St-Miami-FL-33165/44180500_zpid/","ZPID":"44180500","Home Type":"SINGLE_FAMILY"},{"Full Address":"1925 SW 82nd Ct, Miami, FL 33155","Street":"1925 SW 82nd Ct","City":"Miami","State":"FL","ZIP Code":"33155","Beds":3,"Baths":2.0,"Sq Ft":1546,"Sale Date":"2025-08-15","Sale Month":"2025-08","Sold Price ($)":650000.0,"Zestimate ($)":645700,"Price Change ($)":-24000,"Price/SqFt ($)":420,"Broker":"Skilled Real Estate, LLC","Zillow URL":"https://www.zillow.com/homedetails/1925-SW-82nd-Ct-Miami-FL-33155/44182235_zpid/","ZPID":"44182235","Home Type":"SINGLE_FAMILY"},{"Full Address":"1401 SW 82nd Ct, Miami, FL 33144","Street":"1401 SW 82nd Ct","City":"Miami","State":"FL","ZIP Code":"33144","Beds":3,"Baths":2.0,"Sq Ft":1614,"Sale Date":"2025-08-18","Sale Month":"2025-08","Sold Price ($)":820000.0,"Zestimate ($)":814800,"Price Change ($)":null,"Price/SqFt ($)":508,"Broker":"Century 21 BE3","Zillow URL":"https://www.zillow.com/homedetails/1401-SW-82nd-Ct-Miami-FL-33144/44182537_zpid/","ZPID":"44182537","Home Type":"SINGLE_FAMILY"},{"Full Address":"2814 SW 92nd Ct, Miami, FL 33165","Street":"2814 SW 92nd Ct","City":"Miami","State":"FL","ZIP Code":"33165","Beds":4,"Baths":3.0,"Sq Ft":1972,"Sale Date":"2025-08-19","Sale Month":"2025-08","Sold Price ($)":825000.0,"Zestimate ($)":824700,"Price Change ($)":null,"Price/SqFt ($)":418,"Broker":"Miami New Realty","Zillow URL":"https://www.zillow.com/homedetails/2814-SW-92nd-Ct-Miami-FL-33165/44194643_zpid/","ZPID":"44194643","Home Type":"SINGLE_FAMILY"},{"Full Address":"8881 SW 28 Street, Miami, FL 33165","Street":"8881 SW 28 Street","City":"Miami","State":"FL","ZIP Code":"33165","Beds":5,"Baths":5.0,"Sq Ft":3138,"Sale Date":"2025-08-20","Sale Month":"2025-08","Sold Price ($)":1250000.0,"Zestimate ($)":1249700,"Price Change ($)":-95001,"Price/SqFt ($)":398,"Broker":"New Century Realty & Investmen","Zillow URL":"https://www.zillow.com/homedetails/8881-SW-28th-St-Miami-FL-33165/44193315_zpid/","ZPID":"44193315","Home Type":"SINGLE_FAMILY"},{"Full Address":"9301 SW 16th St, Miami, FL 33165","Street":"9301 SW 16th St","City":"Miami","State":"FL","ZIP Code":"33165","Beds":4,"Baths":3.0,"Sq Ft":1995,"Sale Date":"2025-08-21","Sale Month":"2025-08","Sold Price ($)":630000.0,"Zestimate ($)":660900,"Price Change ($)":null,"Price/SqFt ($)":316,"Broker":"Coldwell Banker Realty","Zillow URL":"https://www.zillow.com/homedetails/9301-SW-16th-St-Miami-FL-33165/44181012_zpid/","ZPID":"44181012","Home Type":"SINGLE_FAMILY"},{"Full Address":"1335 SW 78th Ct, Miami, FL 33144","Street":"1335 SW 78th Ct","City":"Miami","State":"FL","ZIP Code":"33144","Beds":3,"Baths":2.0,"Sq Ft":1598,"Sale Date":"2025-08-21","Sale Month":"2025-08","Sold Price ($)":680000.0,"Zestimate ($)":675800,"Price Change ($)":null,"Price/SqFt ($)":426,"Broker":"Skyline Realty, LLC","Zillow URL":"https://www.zillow.com/homedetails/1335-SW-78th-Ct-Miami-FL-33144/44183282_zpid/","ZPID":"44183282","Home Type":"SINGLE_FAMILY"},{"Full Address":"2232 SW 82nd Ct, Miami, FL 33155","Street":"2232 SW 82nd Ct","City":"Miami","State":"FL","ZIP Code":"33155","Beds":5,"Baths":3.0,"Sq Ft":2522,"Sale Date":"2025-08-21","Sale Month":"2025-08","Sold Price ($)":760000.0,"Zestimate ($)":755300,"Price Change ($)":null,"Price/SqFt ($)":301,"Broker":"Keller Williams Capital Realty","Zillow URL":"https://www.zillow.com/homedetails/2232-SW-82nd-Ct-Miami-FL-33155/44182266_zpid/","ZPID":"44182266","Home Type":"SINGLE_FAMILY"},{"Full Address":"8450 SW 12th St, Miami, FL 33144","Street":"8450 SW 12th St","City":"Miami","State":"FL","ZIP Code":"33144","Beds":5,"Baths":3.0,"Sq Ft":2953,"Sale Date":"2025-08-22","Sale Month":"2025-08","Sold Price ($)":790000.0,"Zestimate ($)":785200,"Price Change ($)":null,"Price/SqFt ($)":268,"Broker":"Able CRE","Zillow URL":"https://www.zillow.com/homedetails/8450-SW-12th-St-Miami-FL-33144/44183751_zpid/","ZPID":"44183751","Home Type":"SINGLE_FAMILY"},{"Full Address":"2320 SW 89th Ct, Miami, FL 33165","Street":"2320 SW 89th Ct","City":"Miami","State":"FL","ZIP Code":"33165","Beds":3,"Baths":2.0,"Sq Ft":1292,"Sale Date":"2025-08-28","Sale Month":"2025-08","Sold Price ($)":500000.0,"Zestimate ($)":725400,"Price Change ($)":null,"Price/SqFt ($)":387,"Broker":"","Zillow URL":"https://www.zillow.com/homedetails/2320-SW-89th-Ct-Miami-FL-33165/44180407_zpid/","ZPID":"44180407","Home Type":"SINGLE_FAMILY"},{"Full Address":"(undisclosed Address), Miami, FL 33155","Street":"(undisclosed Address)","City":"Miami","State":"FL","ZIP Code":"33155","Beds":3,"Baths":2.0,"Sq Ft":1720,"Sale Date":"2025-09-03","Sale Month":"2025-09","Sold Price ($)":725000.0,"Zestimate ($)":725500,"Price Change ($)":null,"Price/SqFt ($)":422,"Broker":"Royal Realtors Group","Zillow URL":"https://www.zillow.com/homedetails/Miami-FL-33155/44191128_zpid/","ZPID":"44191128","Home Type":"SINGLE_FAMILY"},{"Full Address":"9471 SW 10th St, Miami, FL 33174","Street":"9471 SW 10th St","City":"Miami","State":"FL","ZIP Code":"33174","Beds":5,"Baths":3.0,"Sq Ft":2488,"Sale Date":"2025-09-08","Sale Month":"2025-09","Sold Price ($)":940000.0,"Zestimate ($)":935300,"Price Change ($)":null,"Price/SqFt ($)":378,"Broker":"Orama Realty, LLC.","Zillow URL":"https://www.zillow.com/homedetails/9471-SW-10th-St-Miami-FL-33174/44181586_zpid/","ZPID":"44181586","Home Type":"SINGLE_FAMILY"},{"Full Address":"8621 SW 16th Ter, Miami, FL 33155","Street":"8621 SW 16th Ter","City":"Miami","State":"FL","ZIP Code":"33155","Beds":4,"Baths":2.0,"Sq Ft":1912,"Sale Date":"2025-09-09","Sale Month":"2025-09","Sold Price ($)":625000.0,"Zestimate ($)":804600,"Price Change ($)":null,"Price/SqFt ($)":327,"Broker":"Realty Investments Corp.","Zillow URL":"https://www.zillow.com/homedetails/8621-SW-16th-Ter-Miami-FL-33155/44183575_zpid/","ZPID":"44183575","Home Type":"SINGLE_FAMILY"},{"Full Address":"7813 SW 34th Ter, Miami, FL 33155","Street":"7813 SW 34th Ter","City":"Miami","State":"FL","ZIP Code":"33155","Beds":3,"Baths":2.0,"Sq Ft":1200,"Sale Date":"2025-09-11","Sale Month":"2025-09","Sold Price ($)":660000.0,"Zestimate ($)":660700,"Price Change ($)":null,"Price/SqFt ($)":550,"Broker":"Stephen Eaton R.E. Broker","Zillow URL":"https://www.zillow.com/homedetails/7813-SW-34th-Ter-Miami-FL-33155/44191749_zpid/","ZPID":"44191749","Home Type":"SINGLE_FAMILY"},{"Full Address":"7855 SW 28th St, Miami, FL 33155","Street":"7855 SW 28th St","City":"Miami","State":"FL","ZIP Code":"33155","Beds":4,"Baths":2.0,"Sq Ft":1504,"Sale Date":"2025-09-12","Sale Month":"2025-09","Sold Price ($)":860000.0,"Zestimate ($)":861000,"Price Change ($)":null,"Price/SqFt ($)":572,"Broker":"Shelton and Stewart REALTORS","Zillow URL":"https://www.zillow.com/homedetails/7855-SW-28th-St-Miami-FL-33155/44191305_zpid/","ZPID":"44191305","Home Type":"SINGLE_FAMILY"},{"Full Address":"7970 SW 26th St, Miami, FL 33155","Street":"7970 SW 26th St","City":"Miami","State":"FL","ZIP Code":"33155","Beds":4,"Baths":5.0,"Sq Ft":2947,"Sale Date":"2025-09-15","Sale Month":"2025-09","Sold Price ($)":1600000.0,"Zestimate ($)":1602100,"Price Change ($)":null,"Price/SqFt ($)":543,"Broker":"Real Estate Sales Force","Zillow URL":"https://www.zillow.com/homedetails/7970-SW-26th-St-Miami-FL-33155/44191269_zpid/","ZPID":"44191269","Home Type":"SINGLE_FAMILY"},{"Full Address":"1245 SW 85th Ave, Miami, FL 33144","Street":"1245 SW 85th Ave","City":"Miami","State":"FL","ZIP Code":"33144","Beds":4,"Baths":2.0,"Sq Ft":1837,"Sale Date":"2025-09-17","Sale Month":"2025-09","Sold Price ($)":800000.0,"Zestimate ($)":796500,"Price Change ($)":-20900,"Price/SqFt ($)":435,"Broker":"LPT Realty, LLC","Zillow URL":"https://www.zillow.com/homedetails/1245-SW-85th-Ave-Miami-FL-33144/44183703_zpid/","ZPID":"44183703","Home Type":"SINGLE_FAMILY"},{"Full Address":"1315 SW 78th Pl, Miami, FL 33144","Street":"1315 SW 78th Pl","City":"Miami","State":"FL","ZIP Code":"33144","Beds":3,"Baths":2.0,"Sq Ft":2443,"Sale Date":"2025-09-18","Sale Month":"2025-09","Sold Price ($)":890000.0,"Zestimate ($)":886100,"Price Change ($)":-14100,"Price/SqFt ($)":364,"Broker":"Fortune Christie's International Real Estate","Zillow URL":"https://www.zillow.com/homedetails/1315-SW-78th-Pl-Miami-FL-33144/44182518_zpid/","ZPID":"44182518","Home Type":"SINGLE_FAMILY"},{"Full Address":"2021 SW 82nd Pl, Miami, FL 33155","Street":"2021 SW 82nd Pl","City":"Miami","State":"FL","ZIP Code":"33155","Beds":3,"Baths":2.0,"Sq Ft":1346,"Sale Date":"2025-09-18","Sale Month":"2025-09","Sold Price ($)":635000.0,"Zestimate ($)":632200,"Price Change ($)":null,"Price/SqFt ($)":472,"Broker":"","Zillow URL":"https://www.zillow.com/homedetails/2021-SW-82nd-Pl-Miami-FL-33155/44182278_zpid/","ZPID":"44182278","Home Type":"SINGLE_FAMILY"},{"Full Address":"7835 SW 17th St, Miami, FL 33155","Street":"7835 SW 17th St","City":"Miami","State":"FL","ZIP Code":"33155","Beds":4,"Baths":3.0,"Sq Ft":1980,"Sale Date":"2025-09-19","Sale Month":"2025-09","Sold Price ($)":610000.0,"Zestimate ($)":607400,"Price Change ($)":-90000,"Price/SqFt ($)":308,"Broker":"Real Estate Sales Force","Zillow URL":"https://www.zillow.com/homedetails/7835-SW-17th-St-Miami-FL-33155/44183155_zpid/","ZPID":"44183155","Home Type":"SINGLE_FAMILY"},{"Full Address":"1111 SW 85th Ave, Miami, FL 33144","Street":"1111 SW 85th Ave","City":"Miami","State":"FL","ZIP Code":"33144","Beds":3,"Baths":2.0,"Sq Ft":1452,"Sale Date":"2025-09-23","Sale Month":"2025-09","Sold Price ($)":665000.0,"Zestimate ($)":699800,"Price Change ($)":null,"Price/SqFt ($)":458,"Broker":"Douglas Elliman","Zillow URL":"https://www.zillow.com/homedetails/1111-SW-85th-Ave-Miami-FL-33144/44184168_zpid/","ZPID":"44184168","Home Type":"SINGLE_FAMILY"},{"Full Address":"9340 SW 20th St, Miami, FL 33165","Street":"9340 SW 20th St","City":"Miami","State":"FL","ZIP Code":"33165","Beds":3,"Baths":2.0,"Sq Ft":2284,"Sale Date":"2025-09-24","Sale Month":"2025-09","Sold Price ($)":690000.0,"Zestimate ($)":687200,"Price Change ($)":null,"Price/SqFt ($)":302,"Broker":"","Zillow URL":"https://www.zillow.com/homedetails/9340-SW-20th-St-Miami-FL-33165/44182071_zpid/","ZPID":"44182071","Home Type":"SINGLE_FAMILY"},{"Full Address":"3331 SW 88th Ct, Miami, FL 33165","Street":"3331 SW 88th Ct","City":"Miami","State":"FL","ZIP Code":"33165","Beds":4,"Baths":3.0,"Sq Ft":1917,"Sale Date":"2025-10-06","Sale Month":"2025-10","Sold Price ($)":780000.0,"Zestimate ($)":781800,"Price Change ($)":null,"Price/SqFt ($)":407,"Broker":"EXP Realty LLC","Zillow URL":"https://www.zillow.com/homedetails/3331-SW-88th-Ct-Miami-FL-33165/44193732_zpid/","ZPID":"44193732","Home Type":"SINGLE_FAMILY"},{"Full Address":"2780 SW 92nd Pl, Miami, FL 33165","Street":"2780 SW 92nd Pl","City":"Miami","State":"FL","ZIP Code":"33165","Beds":5,"Baths":2.0,"Sq Ft":1466,"Sale Date":"2025-10-08","Sale Month":"2025-10","Sold Price ($)":950000.0,"Zestimate ($)":949300,"Price Change ($)":null,"Price/SqFt ($)":648,"Broker":"","Zillow URL":"https://www.zillow.com/homedetails/2780-SW-92nd-Pl-Miami-FL-33165/247698362_zpid/","ZPID":"247698362","Home Type":"SINGLE_FAMILY"},{"Full Address":"9463 SW 35th St, Miami, FL 33165","Street":"9463 SW 35th St","City":"Miami","State":"FL","ZIP Code":"33165","Beds":5,"Baths":3.0,"Sq Ft":3644,"Sale Date":"2025-10-09","Sale Month":"2025-10","Sold Price ($)":950000.0,"Zestimate ($)":952300,"Price Change ($)":null,"Price/SqFt ($)":261,"Broker":"BHHS EWM Realty","Zillow URL":"https://www.zillow.com/homedetails/9463-SW-35th-St-Miami-FL-33165/44193926_zpid/","ZPID":"44193926","Home Type":"SINGLE_FAMILY"},{"Full Address":"8580 SW 28th St, Miami, FL 33155","Street":"8580 SW 28th St","City":"Miami","State":"FL","ZIP Code":"33155","Beds":3,"Baths":2.0,"Sq Ft":1400,"Sale Date":"2025-10-09","Sale Month":"2025-10","Sold Price ($)":550000.0,"Zestimate ($)":787100,"Price Change ($)":null,"Price/SqFt ($)":393,"Broker":"","Zillow URL":"https://www.zillow.com/homedetails/8580-SW-28th-St-Miami-FL-33155/44192225_zpid/","ZPID":"44192225","Home Type":"SINGLE_FAMILY"},{"Full Address":"3731 SW 88th Pl, Miami, FL 33165","Street":"3731 SW 88th Pl","City":"Miami","State":"FL","ZIP Code":"33165","Beds":3,"Baths":2.0,"Sq Ft":1344,"Sale Date":"2025-10-10","Sale Month":"2025-10","Sold Price ($)":630000.0,"Zestimate ($)":631500,"Price Change ($)":null,"Price/SqFt ($)":469,"Broker":"Carmona Realty Group, LLC.","Zillow URL":"https://www.zillow.com/homedetails/3731-SW-88th-Pl-Miami-FL-33165/44193840_zpid/","ZPID":"44193840","Home Type":"SINGLE_FAMILY"},{"Full Address":"8341 SW 12th Ter, Miami, FL 33144","Street":"8341 SW 12th Ter","City":"Miami","State":"FL","ZIP Code":"33144","Beds":5,"Baths":2.0,"Sq Ft":null,"Sale Date":"2025-10-14","Sale Month":"2025-10","Sold Price ($)":800000.0,"Zestimate ($)":797600,"Price Change ($)":null,"Price/SqFt ($)":null,"Broker":"One Stop Realty","Zillow URL":"https://www.zillow.com/homedetails/8341-SW-12th-Ter-Miami-FL-33144/44183605_zpid/","ZPID":"44183605","Home Type":"SINGLE_FAMILY"},{"Full Address":"1145 SW 96th Ave, Miami, FL 33174","Street":"1145 SW 96th Ave","City":"Miami","State":"FL","ZIP Code":"33174","Beds":3,"Baths":2.0,"Sq Ft":1756,"Sale Date":"2025-10-17","Sale Month":"2025-10","Sold Price ($)":675000.0,"Zestimate ($)":673000,"Price Change ($)":null,"Price/SqFt ($)":384,"Broker":"Douglas Elliman","Zillow URL":"https://www.zillow.com/homedetails/1145-SW-96th-Ave-Miami-FL-33174/44181263_zpid/","ZPID":"44181263","Home Type":"SINGLE_FAMILY"},{"Full Address":"3645 SW 97th Ave, Miami, FL 33165","Street":"3645 SW 97th Ave","City":"Miami","State":"FL","ZIP Code":"33165","Beds":3,"Baths":2.0,"Sq Ft":1866,"Sale Date":"2025-10-24","Sale Month":"2025-10","Sold Price ($)":690000.0,"Zestimate ($)":691900,"Price Change ($)":null,"Price/SqFt ($)":370,"Broker":"Terra Realty Services","Zillow URL":"https://www.zillow.com/homedetails/3645-SW-97th-Ave-Miami-FL-33165/44193352_zpid/","ZPID":"44193352","Home Type":"SINGLE_FAMILY"},{"Full Address":"973 SW 88th Ave, Miami, FL 33174","Street":"973 SW 88th Ave","City":"Miami","State":"FL","ZIP Code":"33174","Beds":3,"Baths":2.0,"Sq Ft":1309,"Sale Date":"2025-10-24","Sale Month":"2025-10","Sold Price ($)":600000.0,"Zestimate ($)":598400,"Price Change ($)":null,"Price/SqFt ($)":458,"Broker":"Compass Florida, LLC","Zillow URL":"https://www.zillow.com/homedetails/973-SW-88th-Ave-Miami-FL-33174/44182029_zpid/","ZPID":"44182029","Home Type":"SINGLE_FAMILY"},{"Full Address":"8236 SW 36th St, Miami, FL 33155","Street":"8236 SW 36th St","City":"Miami","State":"FL","ZIP Code":"33155","Beds":4,"Baths":3.0,"Sq Ft":2149,"Sale Date":"2025-10-27","Sale Month":"2025-10","Sold Price ($)":1225000.0,"Zestimate ($)":1225600,"Price Change ($)":null,"Price/SqFt ($)":570,"Broker":"Phantom Real Estate","Zillow URL":"https://www.zillow.com/homedetails/8236-SW-36th-St-Miami-FL-33155/250191096_zpid/","ZPID":"250191096","Home Type":"SINGLE_FAMILY"},{"Full Address":"9335 SW 17th St, Miami, FL 33165","Street":"9335 SW 17th St","City":"Miami","State":"FL","ZIP Code":"33165","Beds":3,"Baths":2.0,"Sq Ft":2110,"Sale Date":"2025-10-29","Sale Month":"2025-10","Sold Price ($)":937000.0,"Zestimate ($)":934700,"Price Change ($)":null,"Price/SqFt ($)":444,"Broker":"Prestige Realty Properties","Zillow URL":"https://www.zillow.com/homedetails/9335-SW-17th-St-Miami-FL-33165/44180976_zpid/","ZPID":"44180976","Home Type":"SINGLE_FAMILY"},{"Full Address":"9330 SW 34th St, Miami, FL 33165","Street":"9330 SW 34th St","City":"Miami","State":"FL","ZIP Code":"33165","Beds":4,"Baths":5.0,"Sq Ft":4560,"Sale Date":"2025-10-30","Sale Month":"2025-10","Sold Price ($)":2400000.0,"Zestimate ($)":2407100,"Price Change ($)":null,"Price/SqFt ($)":526,"Broker":"Miami Premier Realty","Zillow URL":"https://www.zillow.com/homedetails/9330-SW-34th-St-Miami-FL-33165/44193952_zpid/","ZPID":"44193952","Home Type":"SINGLE_FAMILY"},{"Full Address":"8220 SW 12th Ter, Miami, FL 33144","Street":"8220 SW 12th Ter","City":"Miami","State":"FL","ZIP Code":"33144","Beds":4,"Baths":2.0,"Sq Ft":1395,"Sale Date":"2025-10-30","Sale Month":"2025-10","Sold Price ($)":670000.0,"Zestimate ($)":668400,"Price Change ($)":null,"Price/SqFt ($)":480,"Broker":"Hustle Bees Realty LLC","Zillow URL":"https://www.zillow.com/homedetails/8220-SW-12th-Ter-Miami-FL-33144/44183621_zpid/","ZPID":"44183621","Home Type":"SINGLE_FAMILY"},{"Full Address":"9360 SW 16th St, Miami, FL 33165","Street":"9360 SW 16th St","City":"Miami","State":"FL","ZIP Code":"33165","Beds":3,"Baths":2.0,"Sq Ft":1886,"Sale Date":"2025-10-31","Sale Month":"2025-10","Sold Price ($)":765000.0,"Zestimate ($)":763200,"Price Change ($)":null,"Price/SqFt ($)":406,"Broker":"Vanguard Group Realty LLC","Zillow URL":"https://www.zillow.com/homedetails/9360-SW-16th-St-Miami-FL-33165/44180959_zpid/","ZPID":"44180959","Home Type":"SINGLE_FAMILY"},{"Full Address":"1711 SW 92nd Pl, Miami, FL 33165","Street":"1711 SW 92nd Pl","City":"Miami","State":"FL","ZIP Code":"33165","Beds":3,"Baths":2.0,"Sq Ft":1465,"Sale Date":"2025-11-03","Sale Month":"2025-11","Sold Price ($)":685000.0,"Zestimate ($)":703400,"Price Change ($)":null,"Price/SqFt ($)":468,"Broker":"Treasured Realty, LLC.","Zillow URL":"https://www.zillow.com/homedetails/1711-SW-92nd-Pl-Miami-FL-33165/44180894_zpid/","ZPID":"44180894","Home Type":"SINGLE_FAMILY"},{"Full Address":"8581 SW 36th St, Miami, FL 33155","Street":"8581 SW 36th St","City":"Miami","State":"FL","ZIP Code":"33155","Beds":3,"Baths":2.0,"Sq Ft":1375,"Sale Date":"2025-11-04","Sale Month":"2025-11","Sold Price ($)":550000.0,"Zestimate ($)":551700,"Price Change ($)":null,"Price/SqFt ($)":400,"Broker":"Brickell Vizcaya Realty Advisors LLC","Zillow URL":"https://www.zillow.com/homedetails/8581-SW-36th-St-Miami-FL-33155/44191905_zpid/","ZPID":"44191905","Home Type":"SINGLE_FAMILY"},{"Full Address":"8450 SW 27th St, Miami, FL 33155","Street":"8450 SW 27th St","City":"Miami","State":"FL","ZIP Code":"33155","Beds":4,"Baths":3.0,"Sq Ft":2009,"Sale Date":"2025-11-05","Sale Month":"2025-11","Sold Price ($)":850000.0,"Zestimate ($)":852500,"Price Change ($)":null,"Price/SqFt ($)":423,"Broker":"United Real Estate Miami","Zillow URL":"https://www.zillow.com/homedetails/8450-SW-27th-St-Miami-FL-33155/44192329_zpid/","ZPID":"44192329","Home Type":"SINGLE_FAMILY"},{"Full Address":"925 SW 94th Ave, Miami, FL 33174","Street":"925 SW 94th Ave","City":"Miami","State":"FL","ZIP Code":"33174","Beds":5,"Baths":3.0,"Sq Ft":2050,"Sale Date":"2025-11-07","Sale Month":"2025-11","Sold Price ($)":770000.0,"Zestimate ($)":768400,"Price Change ($)":-30000,"Price/SqFt ($)":376,"Broker":"United Realty Group Inc","Zillow URL":"https://www.zillow.com/homedetails/925-SW-94th-Ave-Miami-FL-33174/44177688_zpid/","ZPID":"44177688","Home Type":"SINGLE_FAMILY"},{"Full Address":"3635 SW 95th Ave, Miami, FL 33165","Street":"3635 SW 95th Ave","City":"Miami","State":"FL","ZIP Code":"33165","Beds":3,"Baths":1.0,"Sq Ft":1057,"Sale Date":"2025-11-07","Sale Month":"2025-11","Sold Price ($)":570000.0,"Zestimate ($)":589300,"Price Change ($)":null,"Price/SqFt ($)":539,"Broker":"Chez Realty, LLC.","Zillow URL":"https://www.zillow.com/homedetails/3635-SW-95th-Ave-Miami-FL-33165/44193376_zpid/","ZPID":"44193376","Home Type":"SINGLE_FAMILY"},{"Full Address":"9433 SW 17th St, Miami, FL 33165","Street":"9433 SW 17th St","City":"Miami","State":"FL","ZIP Code":"33165","Beds":6,"Baths":4.0,"Sq Ft":3022,"Sale Date":"2025-11-07","Sale Month":"2025-11","Sold Price ($)":870000.0,"Zestimate ($)":889700,"Price Change ($)":-14100,"Price/SqFt ($)":288,"Broker":"Compass Realty Group","Zillow URL":"https://www.zillow.com/homedetails/9433-SW-17th-St-Miami-FL-33165/44181455_zpid/","ZPID":"44181455","Home Type":"SINGLE_FAMILY"},{"Full Address":"971 SW 88th Ave, Miami, FL 33174","Street":"971 SW 88th Ave","City":"Miami","State":"FL","ZIP Code":"33174","Beds":4,"Baths":3.0,"Sq Ft":2396,"Sale Date":"2025-11-07","Sale Month":"2025-11","Sold Price ($)":785000.0,"Zestimate ($)":783300,"Price Change ($)":null,"Price/SqFt ($)":328,"Broker":"Miami New Realty","Zillow URL":"https://www.zillow.com/homedetails/971-SW-88th-Ave-Miami-FL-33174/44182030_zpid/","ZPID":"44182030","Home Type":"SINGLE_FAMILY"},{"Full Address":"7875 SW 33rd Ter, Miami, FL 33155","Street":"7875 SW 33rd Ter","City":"Miami","State":"FL","ZIP Code":"33155","Beds":4,"Baths":3.0,"Sq Ft":1443,"Sale Date":"2025-11-10","Sale Month":"2025-11","Sold Price ($)":690000.0,"Zestimate ($)":692100,"Price Change ($)":null,"Price/SqFt ($)":478,"Broker":"Xcellence Realty","Zillow URL":"https://www.zillow.com/homedetails/7875-SW-33rd-Ter-Miami-FL-33155/44192170_zpid/","ZPID":"44192170","Home Type":"SINGLE_FAMILY"},{"Full Address":"8857 SW 28th St, Miami, FL 33165","Street":"8857 SW 28th St","City":"Miami","State":"FL","ZIP Code":"33165","Beds":3,"Baths":3.0,"Sq Ft":1962,"Sale Date":"2025-11-10","Sale Month":"2025-11","Sold Price ($)":790000.0,"Zestimate ($)":790600,"Price Change ($)":null,"Price/SqFt ($)":403,"Broker":"Fast Service Realty","Zillow URL":"https://www.zillow.com/homedetails/8857-SW-28th-St-Miami-FL-33165/456935821_zpid/","ZPID":"456935821","Home Type":"SINGLE_FAMILY"},{"Full Address":"8311 SW 31st St, Miami, FL 33155","Street":"8311 SW 31st St","City":"Miami","State":"FL","ZIP Code":"33155","Beds":4,"Baths":3.0,"Sq Ft":2180,"Sale Date":"2025-11-12","Sale Month":"2025-11","Sold Price ($)":985000.0,"Zestimate ($)":987900,"Price Change ($)":null,"Price/SqFt ($)":452,"Broker":"Midtown Realty International Inc","Zillow URL":"https://www.zillow.com/homedetails/8311-SW-31st-St-Miami-FL-33155/44191121_zpid/","ZPID":"44191121","Home Type":"SINGLE_FAMILY"},{"Full Address":"1611 SW 93rd Ct, Miami, FL 33165","Street":"1611 SW 93rd Ct","City":"Miami","State":"FL","ZIP Code":"33165","Beds":4,"Baths":2.0,"Sq Ft":1576,"Sale Date":"2025-11-14","Sale Month":"2025-11","Sold Price ($)":795000.0,"Zestimate ($)":793400,"Price Change ($)":null,"Price/SqFt ($)":504,"Broker":"Real Estate Source Group, LLC","Zillow URL":"https://www.zillow.com/homedetails/1611-SW-93rd-Ct-Miami-FL-33165/44180912_zpid/","ZPID":"44180912","Home Type":"SINGLE_FAMILY"},{"Full Address":"901 SW 79th Ave, Miami, FL 33144","Street":"901 SW 79th Ave","City":"Miami","State":"FL","ZIP Code":"33144","Beds":6,"Baths":4.0,"Sq Ft":2184,"Sale Date":"2025-11-17","Sale Month":"2025-11","Sold Price ($)":1055000.0,"Zestimate ($)":1053000,"Price Change ($)":null,"Price/SqFt ($)":483,"Broker":"Florida Capital Realty","Zillow URL":"https://www.zillow.com/homedetails/901-SW-79th-Ave-Miami-FL-33144/44182475_zpid/","ZPID":"44182475","Home Type":"SINGLE_FAMILY"},{"Full Address":"9035 SW 27th St, Miami, FL 33165","Street":"9035 SW 27th St","City":"Miami","State":"FL","ZIP Code":"33165","Beds":3,"Baths":1.0,"Sq Ft":680,"Sale Date":"2025-11-17","Sale Month":"2025-11","Sold Price ($)":575000.0,"Zestimate ($)":576700,"Price Change ($)":null,"Price/SqFt ($)":846,"Broker":"United Realty Group, Inc","Zillow URL":"https://www.zillow.com/homedetails/9035-SW-27th-St-Miami-FL-33165/44193259_zpid/","ZPID":"44193259","Home Type":"SINGLE_FAMILY"},{"Full Address":"3320 SW 92nd Ct, Miami, FL 33165","Street":"3320 SW 92nd Ct","City":"Miami","State":"FL","ZIP Code":"33165","Beds":3,"Baths":3.0,"Sq Ft":1554,"Sale Date":"2025-11-17","Sale Month":"2025-11","Sold Price ($)":790000.0,"Zestimate ($)":792400,"Price Change ($)":null,"Price/SqFt ($)":508,"Broker":"NV Realty Services, Inc.","Zillow URL":"https://www.zillow.com/homedetails/3320-SW-92nd-Ct-Miami-FL-33165/44194152_zpid/","ZPID":"44194152","Home Type":"SINGLE_FAMILY"},{"Full Address":"8120 SW 10th Ter, Miami, FL 33144","Street":"8120 SW 10th Ter","City":"Miami","State":"FL","ZIP Code":"33144","Beds":3,"Baths":2.0,"Sq Ft":1433,"Sale Date":"2025-11-19","Sale Month":"2025-11","Sold Price ($)":620000.0,"Zestimate ($)":621900,"Price Change ($)":null,"Price/SqFt ($)":433,"Broker":"Century 21 Dorar Realty","Zillow URL":"https://www.zillow.com/homedetails/8120-SW-10th-Ter-Miami-FL-33144/44182944_zpid/","ZPID":"44182944","Home Type":"SINGLE_FAMILY"},{"Full Address":"2680 SW 92nd Ct, Miami, FL 33165","Street":"2680 SW 92nd Ct","City":"Miami","State":"FL","ZIP Code":"33165","Beds":3,"Baths":2.0,"Sq Ft":2110,"Sale Date":"2025-11-19","Sale Month":"2025-11","Sold Price ($)":850000.0,"Zestimate ($)":852500,"Price Change ($)":null,"Price/SqFt ($)":403,"Broker":"","Zillow URL":"https://www.zillow.com/homedetails/2680-SW-92nd-Ct-Miami-FL-33165/44194747_zpid/","ZPID":"44194747","Home Type":"SINGLE_FAMILY"},{"Full Address":"8001 SW 36th Ter, Miami, FL 33155","Street":"8001 SW 36th Ter","City":"Miami","State":"FL","ZIP Code":"33155","Beds":3,"Baths":2.0,"Sq Ft":1663,"Sale Date":"2025-11-25","Sale Month":"2025-11","Sold Price ($)":710000.0,"Zestimate ($)":712100,"Price Change ($)":null,"Price/SqFt ($)":427,"Broker":"Elite Miami Realty, LLC","Zillow URL":"https://www.zillow.com/homedetails/8001-SW-36th-Ter-Miami-FL-33155/44191863_zpid/","ZPID":"44191863","Home Type":"SINGLE_FAMILY"},{"Full Address":"9361 SW 16th St, Miami, FL 33165","Street":"9361 SW 16th St","City":"Miami","State":"FL","ZIP Code":"33165","Beds":3,"Baths":2.0,"Sq Ft":1522,"Sale Date":"2025-11-27","Sale Month":"2025-11","Sold Price ($)":500000.0,"Zestimate ($)":null,"Price Change ($)":null,"Price/SqFt ($)":329,"Broker":"Puro Real Estate","Zillow URL":"https://www.zillow.com/homedetails/9361-SW-16th-St-Miami-FL-33165/44181006_zpid/","ZPID":"44181006","Home Type":"SINGLE_FAMILY"},{"Full Address":"8331 SW 38th St, Miami, FL 33155","Street":"8331 SW 38th St","City":"Miami","State":"FL","ZIP Code":"33155","Beds":4,"Baths":2.0,"Sq Ft":1772,"Sale Date":"2025-11-28","Sale Month":"2025-11","Sold Price ($)":696000.0,"Zestimate ($)":698100,"Price Change ($)":null,"Price/SqFt ($)":393,"Broker":"Florida Homes Realty & Mortgag","Zillow URL":"https://www.zillow.com/homedetails/8331-SW-38th-St-Miami-FL-33155/44191516_zpid/","ZPID":"44191516","Home Type":"SINGLE_FAMILY"},{"Full Address":"2915 SW 92nd Pl, Miami, FL 33165","Street":"2915 SW 92nd Pl","City":"Miami","State":"FL","ZIP Code":"33165","Beds":3,"Baths":2.0,"Sq Ft":1269,"Sale Date":"2025-12-01","Sale Month":"2025-12","Sold Price ($)":630000.0,"Zestimate ($)":631900,"Price Change ($)":null,"Price/SqFt ($)":496,"Broker":"Coldwell Banker Realty","Zillow URL":"https://www.zillow.com/homedetails/2915-SW-92nd-Pl-Miami-FL-33165/44194660_zpid/","ZPID":"44194660","Home Type":"SINGLE_FAMILY"},{"Full Address":"3245 SW 88th Ct, Miami, FL 33165","Street":"3245 SW 88th Ct","City":"Miami","State":"FL","ZIP Code":"33165","Beds":3,"Baths":2.0,"Sq Ft":1296,"Sale Date":"2025-12-05","Sale Month":"2025-12","Sold Price ($)":465000.0,"Zestimate ($)":466300,"Price Change ($)":null,"Price/SqFt ($)":359,"Broker":"Cisca Real Estate","Zillow URL":"https://www.zillow.com/homedetails/3245-SW-88th-Ct-Miami-FL-33165/44193727_zpid/","ZPID":"44193727","Home Type":"SINGLE_FAMILY"},{"Full Address":"8521 SW 27th Ter, Miami, FL 33155","Street":"8521 SW 27th Ter","City":"Miami","State":"FL","ZIP Code":"33155","Beds":5,"Baths":3.0,"Sq Ft":2185,"Sale Date":"2025-12-05","Sale Month":"2025-12","Sold Price ($)":625000.0,"Zestimate ($)":626800,"Price Change ($)":null,"Price/SqFt ($)":286,"Broker":"Real Estate Direct of S. Fla","Zillow URL":"https://www.zillow.com/homedetails/8521-SW-27th-Ter-Miami-FL-33155/44192348_zpid/","ZPID":"44192348","Home Type":"SINGLE_FAMILY"},{"Full Address":"3501 SW 87th Ave, Miami, FL 33165","Street":"3501 SW 87th Ave","City":"Miami","State":"FL","ZIP Code":"33165","Beds":5,"Baths":3.0,"Sq Ft":1934,"Sale Date":"2025-12-05","Sale Month":"2025-12","Sold Price ($)":950000.0,"Zestimate ($)":1000500,"Price Change ($)":null,"Price/SqFt ($)":491,"Broker":"RE/MAX Advance Realty II","Zillow URL":"https://www.zillow.com/homedetails/3501-SW-87th-Ave-Miami-FL-33165/44191941_zpid/","ZPID":"44191941","Home Type":"SINGLE_FAMILY"},{"Full Address":"3051 SW 84th Ct, Miami, FL 33155","Street":"3051 SW 84th Ct","City":"Miami","State":"FL","ZIP Code":"33155","Beds":4,"Baths":4.0,"Sq Ft":2241,"Sale Date":"2025-12-11","Sale Month":"2025-12","Sold Price ($)":800000.0,"Zestimate ($)":828300,"Price Change ($)":null,"Price/SqFt ($)":357,"Broker":"Sustainable RE, LLC.","Zillow URL":"https://www.zillow.com/homedetails/3051-SW-84th-Ct-Miami-FL-33155/44192244_zpid/","ZPID":"44192244","Home Type":"SINGLE_FAMILY"},{"Full Address":"3310 SW 94th Pl, Miami, FL 33165","Street":"3310 SW 94th Pl","City":"Miami","State":"FL","ZIP Code":"33165","Beds":4,"Baths":3.0,"Sq Ft":1358,"Sale Date":"2025-12-11","Sale Month":"2025-12","Sold Price ($)":620000.0,"Zestimate ($)":640300,"Price Change ($)":null,"Price/SqFt ($)":457,"Broker":"Vision Realty LLC","Zillow URL":"https://www.zillow.com/homedetails/3310-SW-94th-Pl-Miami-FL-33165/44194057_zpid/","ZPID":"44194057","Home Type":"SINGLE_FAMILY"},{"Full Address":"9264 SW 21st Ter, Miami, FL 33165","Street":"9264 SW 21st Ter","City":"Miami","State":"FL","ZIP Code":"33165","Beds":4,"Baths":3.0,"Sq Ft":2336,"Sale Date":"2025-12-15","Sale Month":"2025-12","Sold Price ($)":775000.0,"Zestimate ($)":773900,"Price Change ($)":null,"Price/SqFt ($)":332,"Broker":"Outside Investments, Inc.","Zillow URL":"https://www.zillow.com/homedetails/9264-SW-21st-Ter-Miami-FL-33165/44181438_zpid/","ZPID":"44181438","Home Type":"SINGLE_FAMILY"},{"Full Address":"9620 SW 9th Ter, Miami, FL 33174","Street":"9620 SW 9th Ter","City":"Miami","State":"FL","ZIP Code":"33174","Beds":3,"Baths":2.0,"Sq Ft":1364,"Sale Date":"2025-12-16","Sale Month":"2025-12","Sold Price ($)":596800.0,"Zestimate ($)":813100,"Price Change ($)":-19900,"Price/SqFt ($)":438,"Broker":"","Zillow URL":"https://www.zillow.com/homedetails/9620-SW-9th-Ter-Miami-FL-33174/44181242_zpid/","ZPID":"44181242","Home Type":"SINGLE_FAMILY"},{"Full Address":"7901 SW 22nd St, Miami, FL 33155","Street":"7901 SW 22nd St","City":"Miami","State":"FL","ZIP Code":"33155","Beds":3,"Baths":2.0,"Sq Ft":1215,"Sale Date":"2025-12-16","Sale Month":"2025-12","Sold Price ($)":275000.0,"Zestimate ($)":766600,"Price Change ($)":null,"Price/SqFt ($)":226,"Broker":"","Zillow URL":"https://www.zillow.com/homedetails/7901-SW-22nd-St-Miami-FL-33155/44182792_zpid/","ZPID":"44182792","Home Type":"SINGLE_FAMILY"},{"Full Address":"9231 SW 20th St, Miami, FL 33165","Street":"9231 SW 20th St","City":"Miami","State":"FL","ZIP Code":"33165","Beds":3,"Baths":2.0,"Sq Ft":1397,"Sale Date":"2025-12-17","Sale Month":"2025-12","Sold Price ($)":630000.0,"Zestimate ($)":629100,"Price Change ($)":null,"Price/SqFt ($)":451,"Broker":"","Zillow URL":"https://www.zillow.com/homedetails/9231-SW-20th-St-Miami-FL-33165/44180885_zpid/","ZPID":"44180885","Home Type":"SINGLE_FAMILY"},{"Full Address":"2341 SW 92nd Pl, Miami, FL 33165","Street":"2341 SW 92nd Pl","City":"Miami","State":"FL","ZIP Code":"33165","Beds":5,"Baths":3.0,"Sq Ft":2071,"Sale Date":"2025-12-18","Sale Month":"2025-12","Sold Price ($)":800000.0,"Zestimate ($)":827400,"Price Change ($)":null,"Price/SqFt ($)":386,"Broker":"Lifestyle International Realty","Zillow URL":"https://www.zillow.com/homedetails/2341-SW-92nd-Pl-Miami-FL-33165/44181559_zpid/","ZPID":"44181559","Home Type":"SINGLE_FAMILY"},{"Full Address":"8930 SW 38th St, Miami, FL 33165","Street":"8930 SW 38th St","City":"Miami","State":"FL","ZIP Code":"33165","Beds":4,"Baths":4.0,"Sq Ft":2009,"Sale Date":"2025-12-19","Sale Month":"2025-12","Sold Price ($)":522000.0,"Zestimate ($)":677700,"Price Change ($)":null,"Price/SqFt ($)":260,"Broker":"","Zillow URL":"https://www.zillow.com/homedetails/8930-SW-38th-St-Miami-FL-33165/44192783_zpid/","ZPID":"44192783","Home Type":"SINGLE_FAMILY"},{"Full Address":"8301 SW 38th St, Miami, FL 33155","Street":"8301 SW 38th St","City":"Miami","State":"FL","ZIP Code":"33155","Beds":3,"Baths":2.0,"Sq Ft":1834,"Sale Date":"2025-12-19","Sale Month":"2025-12","Sold Price ($)":505000.0,"Zestimate ($)":506300,"Price Change ($)":null,"Price/SqFt ($)":275,"Broker":"M-Sec Realty, LLC","Zillow URL":"https://www.zillow.com/homedetails/8301-SW-38th-St-Miami-FL-33155/44191513_zpid/","ZPID":"44191513","Home Type":"SINGLE_FAMILY"},{"Full Address":"9540 SW 19th St, Miami, FL 33165","Street":"9540 SW 19th St","City":"Miami","State":"FL","ZIP Code":"33165","Beds":3,"Baths":2.0,"Sq Ft":1410,"Sale Date":"2025-12-19","Sale Month":"2025-12","Sold Price ($)":625000.0,"Zestimate ($)":624100,"Price Change ($)":null,"Price/SqFt ($)":443,"Broker":"","Zillow URL":"https://www.zillow.com/homedetails/9540-SW-19th-St-Miami-FL-33165/44181280_zpid/","ZPID":"44181280","Home Type":"SINGLE_FAMILY"},{"Full Address":"7893 SW 9th Ter, Miami, FL 33144","Street":"7893 SW 9th Ter","City":"Miami","State":"FL","ZIP Code":"33144","Beds":4,"Baths":3.0,"Sq Ft":1816,"Sale Date":"2025-12-22","Sale Month":"2025-12","Sold Price ($)":490000.0,"Zestimate ($)":736500,"Price Change ($)":-10000,"Price/SqFt ($)":270,"Broker":"","Zillow URL":"https://www.zillow.com/homedetails/7893-SW-9th-Ter-Miami-FL-33144/44184118_zpid/","ZPID":"44184118","Home Type":"SINGLE_FAMILY"},{"Full Address":"8000 SW 36th St, Miami, FL 33155","Street":"8000 SW 36th St","City":"Miami","State":"FL","ZIP Code":"33155","Beds":4,"Baths":3.0,"Sq Ft":1500,"Sale Date":"2025-12-23","Sale Month":"2025-12","Sold Price ($)":710000.0,"Zestimate ($)":711800,"Price Change ($)":null,"Price/SqFt ($)":473,"Broker":"Beehouse Realty, LLC.","Zillow URL":"https://www.zillow.com/homedetails/8000-SW-36th-St-Miami-FL-33155/44191848_zpid/","ZPID":"44191848","Home Type":"SINGLE_FAMILY"},{"Full Address":"8100 SW 34th St, Miami, FL 33155","Street":"8100 SW 34th St","City":"Miami","State":"FL","ZIP Code":"33155","Beds":4,"Baths":3.0,"Sq Ft":3268,"Sale Date":"2025-12-23","Sale Month":"2025-12","Sold Price ($)":900000.0,"Zestimate ($)":902300,"Price Change ($)":null,"Price/SqFt ($)":275,"Broker":"EXP Realty LLC","Zillow URL":"https://www.zillow.com/homedetails/8100-SW-34th-St-Miami-FL-33155/44192542_zpid/","ZPID":"44192542","Home Type":"SINGLE_FAMILY"},{"Full Address":"1325 SW 78th Ave, Miami, FL 33144","Street":"1325 SW 78th Ave","City":"Miami","State":"FL","ZIP Code":"33144","Beds":4,"Baths":2.0,"Sq Ft":1658,"Sale Date":"2025-12-23","Sale Month":"2025-12","Sold Price ($)":389000.0,"Zestimate ($)":838700,"Price Change ($)":null,"Price/SqFt ($)":235,"Broker":"","Zillow URL":"https://www.zillow.com/homedetails/1325-SW-78th-Ave-Miami-FL-33144/44183818_zpid/","ZPID":"44183818","Home Type":"SINGLE_FAMILY"},{"Full Address":"9411 SW 30th Ter, Miami, FL 33165","Street":"9411 SW 30th Ter","City":"Miami","State":"FL","ZIP Code":"33165","Beds":3,"Baths":2.0,"Sq Ft":1450,"Sale Date":"2025-12-26","Sale Month":"2025-12","Sold Price ($)":675000.0,"Zestimate ($)":676700,"Price Change ($)":null,"Price/SqFt ($)":466,"Broker":"Compass Florida, LLC","Zillow URL":"https://www.zillow.com/homedetails/9411-SW-30th-Ter-Miami-FL-33165/44194562_zpid/","ZPID":"44194562","Home Type":"SINGLE_FAMILY"},{"Full Address":"2735 SW 77th Ct, Miami, FL 33155","Street":"2735 SW 77th Ct","City":"Miami","State":"FL","ZIP Code":"33155","Beds":4,"Baths":3.0,"Sq Ft":1998,"Sale Date":"2025-12-29","Sale Month":"2025-12","Sold Price ($)":590000.0,"Zestimate ($)":596000,"Price Change ($)":null,"Price/SqFt ($)":295,"Broker":"RE/MAX Advance Realty","Zillow URL":"https://www.zillow.com/homedetails/2735-SW-77th-Ct-Miami-FL-33155/44191340_zpid/","ZPID":"44191340","Home Type":"SINGLE_FAMILY"},{"Full Address":"8560 SW 27th Ln, Miami, FL 33155","Street":"8560 SW 27th Ln","City":"Miami","State":"FL","ZIP Code":"33155","Beds":3,"Baths":2.0,"Sq Ft":1612,"Sale Date":"2025-12-30","Sale Month":"2025-12","Sold Price ($)":795000.0,"Zestimate ($)":796900,"Price Change ($)":null,"Price/SqFt ($)":493,"Broker":"Rejoice Realty Group,  Inc.","Zillow URL":"https://www.zillow.com/homedetails/8560-SW-27th-Ln-Miami-FL-33155/44192264_zpid/","ZPID":"44192264","Home Type":"SINGLE_FAMILY"},{"Full Address":"1001 SW 88th Ct, Miami, FL 33174","Street":"1001 SW 88th Ct","City":"Miami","State":"FL","ZIP Code":"33174","Beds":3,"Baths":2.0,"Sq Ft":1185,"Sale Date":"2026-01-02","Sale Month":"2026-01","Sold Price ($)":570000.0,"Zestimate ($)":571300,"Price Change ($)":null,"Price/SqFt ($)":481,"Broker":"Miami Premier Realty","Zillow URL":"https://www.zillow.com/homedetails/1001-SW-88th-Ct-Miami-FL-33174/458626459_zpid/","ZPID":"458626459","Home Type":"SINGLE_FAMILY"},{"Full Address":"1620 SW 87th Ct, Miami, FL 33165","Street":"1620 SW 87th Ct","City":"Miami","State":"FL","ZIP Code":"33165","Beds":3,"Baths":2.0,"Sq Ft":1144,"Sale Date":"2026-01-02","Sale Month":"2026-01","Sold Price ($)":650000.0,"Zestimate ($)":649100,"Price Change ($)":null,"Price/SqFt ($)":568,"Broker":"GRM International Realty, Inc.","Zillow URL":"https://www.zillow.com/homedetails/1620-SW-87th-Ct-Miami-FL-33165/44180560_zpid/","ZPID":"44180560","Home Type":"SINGLE_FAMILY"},{"Full Address":"3781 SW 97th Ave, Miami, FL 33165","Street":"3781 SW 97th Ave","City":"Miami","State":"FL","ZIP Code":"33165","Beds":3,"Baths":3.0,"Sq Ft":1783,"Sale Date":"2026-01-08","Sale Month":"2026-01","Sold Price ($)":650000.0,"Zestimate ($)":651400,"Price Change ($)":null,"Price/SqFt ($)":365,"Broker":"Heyder Investment LLC","Zillow URL":"https://www.zillow.com/homedetails/3781-SW-97th-Ave-Miami-FL-33165/44192730_zpid/","ZPID":"44192730","Home Type":"SINGLE_FAMILY"},{"Full Address":"1931 SW 83rd Ave, Miami, FL 33155","Street":"1931 SW 83rd Ave","City":"Miami","State":"FL","ZIP Code":"33155","Beds":3,"Baths":2.0,"Sq Ft":1241,"Sale Date":"2026-01-16","Sale Month":"2026-01","Sold Price ($)":675000.0,"Zestimate ($)":674100,"Price Change ($)":null,"Price/SqFt ($)":544,"Broker":"Xcellence Realty","Zillow URL":"https://www.zillow.com/homedetails/1931-SW-83rd-Ave-Miami-FL-33155/44182569_zpid/","ZPID":"44182569","Home Type":"SINGLE_FAMILY"},{"Full Address":"9645 SW 10th Ter, Miami, FL 33174","Street":"9645 SW 10th Ter","City":"Miami","State":"FL","ZIP Code":"33174","Beds":4,"Baths":3.0,"Sq Ft":2314,"Sale Date":"2026-01-22","Sale Month":"2026-01","Sold Price ($)":930000.0,"Zestimate ($)":948700,"Price Change ($)":null,"Price/SqFt ($)":402,"Broker":"Miami New Realty","Zillow URL":"https://www.zillow.com/homedetails/9645-SW-10th-Ter-Miami-FL-33174/44181239_zpid/","ZPID":"44181239","Home Type":"SINGLE_FAMILY"},{"Full Address":"8341 SW 27th Ln, Miami, FL 33155","Street":"8341 SW 27th Ln","City":"Miami","State":"FL","ZIP Code":"33155","Beds":3,"Baths":1.0,"Sq Ft":1260,"Sale Date":"2026-01-28","Sale Month":"2026-01","Sold Price ($)":580000.0,"Zestimate ($)":780200,"Price Change ($)":null,"Price/SqFt ($)":460,"Broker":"RE/MAX Advance Realty II","Zillow URL":"https://www.zillow.com/homedetails/8341-SW-27th-Ln-Miami-FL-33155/44190989_zpid/","ZPID":"44190989","Home Type":"SINGLE_FAMILY"},{"Full Address":"7910 SW 17th St, Miami, FL 33155","Street":"7910 SW 17th St","City":"Miami","State":"FL","ZIP Code":"33155","Beds":3,"Baths":2.0,"Sq Ft":1704,"Sale Date":"2026-02-04","Sale Month":"2026-02","Sold Price ($)":776000.0,"Zestimate ($)":774900,"Price Change ($)":null,"Price/SqFt ($)":455,"Broker":"Luxe Properties","Zillow URL":"https://www.zillow.com/homedetails/7910-SW-17th-St-Miami-FL-33155/44183131_zpid/","ZPID":"44183131","Home Type":"SINGLE_FAMILY"},{"Full Address":"975 SW 89th Ave, Miami, FL 33174","Street":"975 SW 89th Ave","City":"Miami","State":"FL","ZIP Code":"33174","Beds":3,"Baths":3.0,"Sq Ft":1007,"Sale Date":"2026-02-09","Sale Month":"2026-02","Sold Price ($)":600000.0,"Zestimate ($)":599300,"Price Change ($)":null,"Price/SqFt ($)":596,"Broker":"Compass Florida, LLC","Zillow URL":"https://www.zillow.com/homedetails/975-SW-89th-Ave-Miami-FL-33174/450857586_zpid/","ZPID":"450857586","Home Type":"SINGLE_FAMILY"},{"Full Address":"9032 SW 8th Ter, Miami, FL 33174","Street":"9032 SW 8th Ter","City":"Miami","State":"FL","ZIP Code":"33174","Beds":2,"Baths":2.0,"Sq Ft":1185,"Sale Date":"2026-02-18","Sale Month":"2026-02","Sold Price ($)":580000.0,"Zestimate ($)":579400,"Price Change ($)":null,"Price/SqFt ($)":489,"Broker":"Volante Realty Group LLC","Zillow URL":"https://www.zillow.com/homedetails/9032-SW-8th-Ter-Miami-FL-33174/457055420_zpid/","ZPID":"457055420","Home Type":"SINGLE_FAMILY"},{"Full Address":"2801 SW 92nd Ct, Miami, FL 33165","Street":"2801 SW 92nd Ct","City":"Miami","State":"FL","ZIP Code":"33165","Beds":4,"Baths":2.0,"Sq Ft":1401,"Sale Date":"2026-02-18","Sale Month":"2026-02","Sold Price ($)":640000.0,"Zestimate ($)":676100,"Price Change ($)":null,"Price/SqFt ($)":457,"Broker":"First Service Realty ERA","Zillow URL":"https://www.zillow.com/homedetails/2801-SW-92nd-Ct-Miami-FL-33165/44194693_zpid/","ZPID":"44194693","Home Type":"SINGLE_FAMILY"},{"Full Address":"7815 SW 21st Ter, Miami, FL 33155","Street":"7815 SW 21st Ter","City":"Miami","State":"FL","ZIP Code":"33155","Beds":5,"Baths":3.0,"Sq Ft":2456,"Sale Date":"2026-02-24","Sale Month":"2026-02","Sold Price ($)":795000.0,"Zestimate ($)":794300,"Price Change ($)":null,"Price/SqFt ($)":324,"Broker":"Xcellence Realty","Zillow URL":"https://www.zillow.com/homedetails/7815-SW-21st-Ter-Miami-FL-33155/44183930_zpid/","ZPID":"44183930","Home Type":"SINGLE_FAMILY"},{"Full Address":"9461 SW 31st Ter, Miami, FL 33165","Street":"9461 SW 31st Ter","City":"Miami","State":"FL","ZIP Code":"33165","Beds":4,"Baths":2.0,"Sq Ft":1864,"Sale Date":"2026-02-26","Sale Month":"2026-02","Sold Price ($)":850000.0,"Zestimate ($)":849200,"Price Change ($)":null,"Price/SqFt ($)":456,"Broker":"Compass Florida, LLC","Zillow URL":"https://www.zillow.com/homedetails/9461-SW-31st-Ter-Miami-FL-33165/44194529_zpid/","ZPID":"44194529","Home Type":"SINGLE_FAMILY"},{"Full Address":"8670 SW 27th Ln, Miami, FL 33155","Street":"8670 SW 27th Ln","City":"Miami","State":"FL","ZIP Code":"33155","Beds":4,"Baths":2.0,"Sq Ft":1344,"Sale Date":"2026-02-26","Sale Month":"2026-02","Sold Price ($)":700000.0,"Zestimate ($)":699400,"Price Change ($)":null,"Price/SqFt ($)":521,"Broker":"BHHS EWM Realty","Zillow URL":"https://www.zillow.com/homedetails/8670-SW-27th-Ln-Miami-FL-33155/44192261_zpid/","ZPID":"44192261","Home Type":"SINGLE_FAMILY"},{"Full Address":"8220 SW 29th St, Miami, FL 33155","Street":"8220 SW 29th St","City":"Miami","State":"FL","ZIP Code":"33155","Beds":4,"Baths":2.0,"Sq Ft":1807,"Sale Date":"2026-02-27","Sale Month":"2026-02","Sold Price ($)":620000.0,"Zestimate ($)":941200,"Price Change ($)":null,"Price/SqFt ($)":343,"Broker":"Houwzer LLC","Zillow URL":"https://www.zillow.com/homedetails/8220-SW-29th-St-Miami-FL-33155/44191075_zpid/","ZPID":"44191075","Home Type":"SINGLE_FAMILY"},{"Full Address":"8551 SW 30th St, Miami, FL 33155","Street":"8551 SW 30th St","City":"Miami","State":"FL","ZIP Code":"33155","Beds":4,"Baths":3.0,"Sq Ft":2248,"Sale Date":"2026-02-27","Sale Month":"2026-02","Sold Price ($)":845000.0,"Zestimate ($)":844300,"Price Change ($)":null,"Price/SqFt ($)":376,"Broker":"United Realty Group Inc","Zillow URL":"https://www.zillow.com/homedetails/8551-SW-30th-St-Miami-FL-33155/44192220_zpid/","ZPID":"44192220","Home Type":"SINGLE_FAMILY"},{"Full Address":"8371 SW 32nd Ter, Miami, FL 33155","Street":"8371 SW 32nd Ter","City":"Miami","State":"FL","ZIP Code":"33155","Beds":4,"Baths":2.0,"Sq Ft":1703,"Sale Date":"2026-02-27","Sale Month":"2026-02","Sold Price ($)":765000.0,"Zestimate ($)":764300,"Price Change ($)":null,"Price/SqFt ($)":449,"Broker":"The Keyes Company","Zillow URL":"https://www.zillow.com/homedetails/8371-SW-32nd-Ter-Miami-FL-33155/44191596_zpid/","ZPID":"44191596","Home Type":"SINGLE_FAMILY"},{"Full Address":"9032 SW 8th Ter #A, Miami, FL 33174","Street":"9032 SW 8th Ter #A","City":"Miami","State":"FL","ZIP Code":"33174","Beds":2,"Baths":2.0,"Sq Ft":1185,"Sale Date":"2026-03-03","Sale Month":"2026-03","Sold Price ($)":580000.0,"Zestimate ($)":579400,"Price Change ($)":null,"Price/SqFt ($)":489,"Broker":"","Zillow URL":"https://www.zillow.com/homedetails/9032-SW-8th-Ter-A-Miami-FL-33174/44181674_zpid/","ZPID":"44181674","Home Type":"SINGLE_FAMILY"},{"Full Address":"8271 SW 30th St, Miami, FL 33155","Street":"8271 SW 30th St","City":"Miami","State":"FL","ZIP Code":"33155","Beds":3,"Baths":2.0,"Sq Ft":1366,"Sale Date":"2026-03-05","Sale Month":"2026-03","Sold Price ($)":575100.0,"Zestimate ($)":705400,"Price Change ($)":null,"Price/SqFt ($)":421,"Broker":"","Zillow URL":"https://www.zillow.com/homedetails/8271-SW-30th-St-Miami-FL-33155/44191097_zpid/","ZPID":"44191097","Home Type":"SINGLE_FAMILY"},{"Full Address":"9361 SW 27th St, Miami, FL 33165","Street":"9361 SW 27th St","City":"Miami","State":"FL","ZIP Code":"33165","Beds":4,"Baths":2.0,"Sq Ft":1806,"Sale Date":"2026-03-05","Sale Month":"2026-03","Sold Price ($)":500000.0,"Zestimate ($)":499300,"Price Change ($)":null,"Price/SqFt ($)":277,"Broker":"","Zillow URL":"https://www.zillow.com/homedetails/9361-SW-27th-St-Miami-FL-33165/44194343_zpid/","ZPID":"44194343","Home Type":"SINGLE_FAMILY"},{"Full Address":"8440 SW 27th Ter, Miami, FL 33155","Street":"8440 SW 27th Ter","City":"Miami","State":"FL","ZIP Code":"33155","Beds":4,"Baths":2.0,"Sq Ft":1606,"Sale Date":"2026-03-06","Sale Month":"2026-03","Sold Price ($)":838000.0,"Zestimate ($)":837400,"Price Change ($)":null,"Price/SqFt ($)":522,"Broker":"Real Estate TeamMates","Zillow URL":"https://www.zillow.com/homedetails/8440-SW-27th-Ter-Miami-FL-33155/44192304_zpid/","ZPID":"44192304","Home Type":"SINGLE_FAMILY"},{"Full Address":"7865 SW 18th Ter, Miami, FL 33155","Street":"7865 SW 18th Ter","City":"Miami","State":"FL","ZIP Code":"33155","Beds":3,"Baths":2.0,"Sq Ft":2108,"Sale Date":"2026-03-06","Sale Month":"2026-03","Sold Price ($)":650000.0,"Zestimate ($)":649500,"Price Change ($)":null,"Price/SqFt ($)":308,"Broker":"","Zillow URL":"https://www.zillow.com/homedetails/7865-SW-18th-Ter-Miami-FL-33155/44182673_zpid/","ZPID":"44182673","Home Type":"SINGLE_FAMILY"},{"Full Address":"9471 SW 12th St, Miami, FL 33174","Street":"9471 SW 12th St","City":"Miami","State":"FL","ZIP Code":"33174","Beds":3,"Baths":2.0,"Sq Ft":2301,"Sale Date":"2026-03-09","Sale Month":"2026-03","Sold Price ($)":687500.0,"Zestimate ($)":827600,"Price Change ($)":null,"Price/SqFt ($)":299,"Broker":"","Zillow URL":"https://www.zillow.com/homedetails/9471-SW-12th-St-Miami-FL-33174/44181577_zpid/","ZPID":"44181577","Home Type":"SINGLE_FAMILY"},{"Full Address":"2325 SW 89th Pl, Miami, FL 33165","Street":"2325 SW 89th Pl","City":"Miami","State":"FL","ZIP Code":"33165","Beds":3,"Baths":1.0,"Sq Ft":1252,"Sale Date":"2026-03-13","Sale Month":"2026-03","Sold Price ($)":175000.0,"Zestimate ($)":541500,"Price Change ($)":null,"Price/SqFt ($)":140,"Broker":"","Zillow URL":"https://www.zillow.com/homedetails/2325-SW-89th-Pl-Miami-FL-33165/44180410_zpid/","ZPID":"44180410","Home Type":"SINGLE_FAMILY"},{"Full Address":"7701 SW 15th St, Miami, FL 33144","Street":"7701 SW 15th St","City":"Miami","State":"FL","ZIP Code":"33144","Beds":4,"Baths":2.0,"Sq Ft":2399,"Sale Date":"2026-03-18","Sale Month":"2026-03","Sold Price ($)":569700.0,"Zestimate ($)":null,"Price Change ($)":null,"Price/SqFt ($)":237,"Broker":"","Zillow URL":"https://www.zillow.com/homedetails/7701-SW-15th-St-Miami-FL-33144/44183825_zpid/","ZPID":"44183825","Home Type":"SINGLE_FAMILY"},{"Full Address":"2525 SW 88th Ave, Miami, FL 33165","Street":"2525 SW 88th Ave","City":"Miami","State":"FL","ZIP Code":"33165","Beds":2,"Baths":1.0,"Sq Ft":825,"Sale Date":"2026-03-18","Sale Month":"2026-03","Sold Price ($)":500000.0,"Zestimate ($)":598900,"Price Change ($)":null,"Price/SqFt ($)":606,"Broker":"","Zillow URL":"https://www.zillow.com/homedetails/2525-SW-88th-Ave-Miami-FL-33165/44193223_zpid/","ZPID":"44193223","Home Type":"SINGLE_FAMILY"},{"Full Address":"2930 SW 79th Ct, Miami, FL 33155","Street":"2930 SW 79th Ct","City":"Miami","State":"FL","ZIP Code":"33155","Beds":5,"Baths":5.0,"Sq Ft":2863,"Sale Date":"2026-03-23","Sale Month":"2026-03","Sold Price ($)":1275000.0,"Zestimate ($)":1274900,"Price Change ($)":null,"Price/SqFt ($)":445,"Broker":"Florida Realty of Miami Corp","Zillow URL":"https://www.zillow.com/homedetails/2930-SW-79th-Ct-Miami-FL-33155/44191376_zpid/","ZPID":"44191376","Home Type":"SINGLE_FAMILY"},{"Full Address":"9350 SW 16th St, Miami, FL 33165","Street":"9350 SW 16th St","City":"Miami","State":"FL","ZIP Code":"33165","Beds":3,"Baths":2.0,"Sq Ft":1397,"Sale Date":"2026-03-24","Sale Month":"2026-03","Sold Price ($)":670000.0,"Zestimate ($)":717500,"Price Change ($)":null,"Price/SqFt ($)":480,"Broker":"","Zillow URL":"https://www.zillow.com/homedetails/9350-SW-16th-St-Miami-FL-33165/44180958_zpid/","ZPID":"44180958","Home Type":"SINGLE_FAMILY"},{"Full Address":"1420 SW 82nd Ave, Miami, FL 33144","Street":"1420 SW 82nd Ave","City":"Miami","State":"FL","ZIP Code":"33144","Beds":3,"Baths":2.0,"Sq Ft":1410,"Sale Date":"2026-03-25","Sale Month":"2026-03","Sold Price ($)":700000.0,"Zestimate ($)":699900,"Price Change ($)":null,"Price/SqFt ($)":496,"Broker":"Compass Florida, LLC.","Zillow URL":"https://www.zillow.com/homedetails/1420-SW-82nd-Ave-Miami-FL-33144/44182524_zpid/","ZPID":"44182524","Home Type":"SINGLE_FAMILY"},{"Full Address":"3711 SW 87th Ave, Miami, FL 33165","Street":"3711 SW 87th Ave","City":"Miami","State":"FL","ZIP Code":"33165","Beds":4,"Baths":3.0,"Sq Ft":2928,"Sale Date":"2026-03-25","Sale Month":"2026-03","Sold Price ($)":910000.0,"Zestimate ($)":910000,"Price Change ($)":null,"Price/SqFt ($)":311,"Broker":"Chez Realty, LLC.","Zillow URL":"https://www.zillow.com/homedetails/3711-SW-87th-Ave-Miami-FL-33165/44191547_zpid/","ZPID":"44191547","Home Type":"SINGLE_FAMILY"},{"Full Address":"1621 SW 93rd Ct, Miami, FL 33165","Street":"1621 SW 93rd Ct","City":"Miami","State":"FL","ZIP Code":"33165","Beds":3,"Baths":2.0,"Sq Ft":1377,"Sale Date":"2026-03-26","Sale Month":"2026-03","Sold Price ($)":785000.0,"Zestimate ($)":785000,"Price Change ($)":null,"Price/SqFt ($)":570,"Broker":"","Zillow URL":"https://www.zillow.com/homedetails/1621-SW-93rd-Ct-Miami-FL-33165/44180913_zpid/","ZPID":"44180913","Home Type":"SINGLE_FAMILY"},{"Full Address":"1701 SW 92nd Pl, Miami, FL 33165","Street":"1701 SW 92nd Pl","City":"Miami","State":"FL","ZIP Code":"33165","Beds":3,"Baths":2.0,"Sq Ft":1685,"Sale Date":"2026-03-30","Sale Month":"2026-03","Sold Price ($)":715000.0,"Zestimate ($)":714700,"Price Change ($)":null,"Price/SqFt ($)":424,"Broker":"Epic Choice Realty","Zillow URL":"https://www.zillow.com/homedetails/1701-SW-92nd-Pl-Miami-FL-33165/44180893_zpid/","ZPID":"44180893","Home Type":"SINGLE_FAMILY"},{"Full Address":"8001 SW 14th Ter, Miami, FL 33144","Street":"8001 SW 14th Ter","City":"Miami","State":"FL","ZIP Code":"33144","Beds":4,"Baths":1.0,"Sq Ft":1680,"Sale Date":"2026-03-30","Sale Month":"2026-03","Sold Price ($)":696900.0,"Zestimate ($)":696300,"Price Change ($)":null,"Price/SqFt ($)":415,"Broker":"","Zillow URL":"https://www.zillow.com/homedetails/8001-SW-14th-Ter-Miami-FL-33144/44183035_zpid/","ZPID":"44183035","Home Type":"SINGLE_FAMILY"},{"Full Address":"1170 SW 85th Court, Miami, FL 33144","Street":"1170 SW 85th Court","City":"Miami","State":"FL","ZIP Code":"33144","Beds":3,"Baths":2.0,"Sq Ft":1741,"Sale Date":"2026-03-31","Sale Month":"2026-03","Sold Price ($)":750000.0,"Zestimate ($)":749500,"Price Change ($)":null,"Price/SqFt ($)":431,"Broker":"Luxe Properties","Zillow URL":"https://www.zillow.com/homedetails/1170-SW-85th-Ct-Miami-FL-33144/44184155_zpid/","ZPID":"44184155","Home Type":"SINGLE_FAMILY"},{"Full Address":"8431 SW 27th Ter, Miami, FL 33155","Street":"8431 SW 27th Ter","City":"Miami","State":"FL","ZIP Code":"33155","Beds":3,"Baths":2.0,"Sq Ft":1562,"Sale Date":"2026-03-31","Sale Month":"2026-03","Sold Price ($)":695000.0,"Zestimate ($)":694500,"Price Change ($)":null,"Price/SqFt ($)":445,"Broker":"Brickell Gables Realty, Inc","Zillow URL":"https://www.zillow.com/homedetails/8431-SW-27th-Ter-Miami-FL-33155/44192343_zpid/","ZPID":"44192343","Home Type":"SINGLE_FAMILY"},{"Full Address":"1401 SW 94th Ave, Miami, FL 33174","Street":"1401 SW 94th Ave","City":"Miami","State":"FL","ZIP Code":"33174","Beds":3,"Baths":2.0,"Sq Ft":1217,"Sale Date":"2026-03-31","Sale Month":"2026-03","Sold Price ($)":700000.0,"Zestimate ($)":null,"Price Change ($)":null,"Price/SqFt ($)":575,"Broker":"Keller Williams Realty Premier Properties","Zillow URL":"https://www.zillow.com/homedetails/1401-SW-94th-Ave-Miami-FL-33174/44177724_zpid/","ZPID":"44177724","Home Type":"SINGLE_FAMILY"},{"Full Address":"9510 SW 29th St, Miami, FL 33165","Street":"9510 SW 29th St","City":"Miami","State":"FL","ZIP Code":"33165","Beds":4,"Baths":3.0,"Sq Ft":2360,"Sale Date":"2026-04-06","Sale Month":"2026-04","Sold Price ($)":685000.0,"Zestimate ($)":684700,"Price Change ($)":null,"Price/SqFt ($)":290,"Broker":"Beycome of Florida LLC","Zillow URL":"https://www.zillow.com/homedetails/9510-SW-29th-St-Miami-FL-33165/44194596_zpid/","ZPID":"44194596","Home Type":"SINGLE_FAMILY"},{"Full Address":"3521 SW 88th Ct, Miami, FL 33165","Street":"3521 SW 88th Ct","City":"Miami","State":"FL","ZIP Code":"33165","Beds":3,"Baths":1.0,"Sq Ft":1244,"Sale Date":"2026-04-08","Sale Month":"2026-04","Sold Price ($)":585000.0,"Zestimate ($)":584800,"Price Change ($)":null,"Price/SqFt ($)":470,"Broker":"Real Estate Sales Force","Zillow URL":"https://www.zillow.com/homedetails/3521-SW-88th-Ct-Miami-FL-33165/44193742_zpid/","ZPID":"44193742","Home Type":"SINGLE_FAMILY"},{"Full Address":"3021 SW 97th Ave, Miami, FL 33165","Street":"3021 SW 97th Ave","City":"Miami","State":"FL","ZIP Code":"33165","Beds":4,"Baths":3.0,"Sq Ft":1965,"Sale Date":"2026-04-09","Sale Month":"2026-04","Sold Price ($)":870000.0,"Zestimate ($)":869700,"Price Change ($)":-29000,"Price/SqFt ($)":443,"Broker":"RE/MAX Advance Realty II","Zillow URL":"https://www.zillow.com/homedetails/3021-SW-97th-Ave-Miami-FL-33165/44194583_zpid/","ZPID":"44194583","Home Type":"SINGLE_FAMILY"},{"Full Address":"7880 SW 14th Ter, Miami, FL 33144","Street":"7880 SW 14th Ter","City":"Miami","State":"FL","ZIP Code":"33144","Beds":4,"Baths":3.0,"Sq Ft":2261,"Sale Date":"2026-04-10","Sale Month":"2026-04","Sold Price ($)":740000.0,"Zestimate ($)":739800,"Price Change ($)":-10000,"Price/SqFt ($)":327,"Broker":"Aterra Real Estate Partners, LLC","Zillow URL":"https://www.zillow.com/homedetails/7880-SW-14th-Ter-Miami-FL-33144/44183190_zpid/","ZPID":"44183190","Home Type":"SINGLE_FAMILY"},{"Full Address":"900 SW 80th Ct, Miami, FL 33144","Street":"900 SW 80th Ct","City":"Miami","State":"FL","ZIP Code":"33144","Beds":3,"Baths":1.0,"Sq Ft":1726,"Sale Date":"2026-04-10","Sale Month":"2026-04","Sold Price ($)":3950000.0,"Zestimate ($)":719800,"Price Change ($)":null,"Price/SqFt ($)":null,"Broker":"","Zillow URL":"https://www.zillow.com/homedetails/900-SW-80th-Ct-Miami-FL-33144/44182506_zpid/","ZPID":"44182506","Home Type":"SINGLE_FAMILY"},{"Full Address":"3820 SW 88th Ct, Miami, FL 33165","Street":"3820 SW 88th Ct","City":"Miami","State":"FL","ZIP Code":"33165","Beds":2,"Baths":1.0,"Sq Ft":800,"Sale Date":"2026-04-14","Sale Month":"2026-04","Sold Price ($)":445000.0,"Zestimate ($)":515200,"Price Change ($)":null,"Price/SqFt ($)":556,"Broker":"","Zillow URL":"https://www.zillow.com/homedetails/3820-SW-88th-Ct-Miami-FL-33165/44193772_zpid/","ZPID":"44193772","Home Type":"SINGLE_FAMILY"},{"Full Address":"7850 SW 16th St, Miami, FL 33155","Street":"7850 SW 16th St","City":"Miami","State":"FL","ZIP Code":"33155","Beds":3,"Baths":2.0,"Sq Ft":1479,"Sale Date":"2026-04-20","Sale Month":"2026-04","Sold Price ($)":565000.0,"Zestimate ($)":564900,"Price Change ($)":null,"Price/SqFt ($)":382,"Broker":"Recuset Realty Corp","Zillow URL":"https://www.zillow.com/homedetails/7850-SW-16th-St-Miami-FL-33155/44183142_zpid/","ZPID":"44183142","Home Type":"SINGLE_FAMILY"},{"Full Address":"8801 SW 21st St, Miami, FL 33165","Street":"8801 SW 21st St","City":"Miami","State":"FL","ZIP Code":"33165","Beds":3,"Baths":1.0,"Sq Ft":1233,"Sale Date":"2026-04-20","Sale Month":"2026-04","Sold Price ($)":635000.0,"Zestimate ($)":632800,"Price Change ($)":-35000,"Price/SqFt ($)":515,"Broker":"Luxe Properties","Zillow URL":"https://www.zillow.com/homedetails/8801-SW-21st-St-Miami-FL-33165/44180527_zpid/","ZPID":"44180527","Home Type":"SINGLE_FAMILY"},{"Full Address":"9310 SW 20th St, Miami, FL 33165","Street":"9310 SW 20th St","City":"Miami","State":"FL","ZIP Code":"33165","Beds":3,"Baths":2.0,"Sq Ft":2107,"Sale Date":"2026-04-21","Sale Month":"2026-04","Sold Price ($)":850000.0,"Zestimate ($)":850000,"Price Change ($)":null,"Price/SqFt ($)":403,"Broker":"Miami New Realty","Zillow URL":"https://www.zillow.com/homedetails/9310-SW-20th-St-Miami-FL-33165/44181416_zpid/","ZPID":"44181416","Home Type":"SINGLE_FAMILY"},{"Full Address":"1821 SW 92nd Pl, Miami, FL 33165","Street":"1821 SW 92nd Pl","City":"Miami","State":"FL","ZIP Code":"33165","Beds":3,"Baths":2.0,"Sq Ft":1347,"Sale Date":"2026-04-22","Sale Month":"2026-04","Sold Price ($)":680000.0,"Zestimate ($)":679800,"Price Change ($)":null,"Price/SqFt ($)":505,"Broker":"KSA Real Estate, LLC.","Zillow URL":"https://www.zillow.com/homedetails/1821-SW-92nd-Pl-Miami-FL-33165/44180899_zpid/","ZPID":"44180899","Home Type":"SINGLE_FAMILY"},{"Full Address":"1101 SW 92nd Ave, Miami, FL 33174","Street":"1101 SW 92nd Ave","City":"Miami","State":"FL","ZIP Code":"33174","Beds":3,"Baths":2.0,"Sq Ft":1962,"Sale Date":"2026-04-22","Sale Month":"2026-04","Sold Price ($)":540000.0,"Zestimate ($)":539700,"Price Change ($)":null,"Price/SqFt ($)":275,"Broker":"","Zillow URL":"https://www.zillow.com/homedetails/1101-SW-92nd-Ave-Miami-FL-33174/44181719_zpid/","ZPID":"44181719","Home Type":"SINGLE_FAMILY"},{"Full Address":"8818 SW 16th St, Miami, FL 33165","Street":"8818 SW 16th St","City":"Miami","State":"FL","ZIP Code":"33165","Beds":3,"Baths":2.0,"Sq Ft":1200,"Sale Date":"2026-04-23","Sale Month":"2026-04","Sold Price ($)":670000.0,"Zestimate ($)":669900,"Price Change ($)":null,"Price/SqFt ($)":558,"Broker":"Julies Realty, LLC","Zillow URL":"https://www.zillow.com/homedetails/8818-SW-16th-St-Miami-FL-33165/44180603_zpid/","ZPID":"44180603","Home Type":"SINGLE_FAMILY"},{"Full Address":"7801 SW 9th Ter, Miami, FL 33144","Street":"7801 SW 9th Ter","City":"Miami","State":"FL","ZIP Code":"33144","Beds":4,"Baths":3.0,"Sq Ft":1752,"Sale Date":"2026-04-23","Sale Month":"2026-04","Sold Price ($)":680000.0,"Zestimate ($)":680000,"Price Change ($)":null,"Price/SqFt ($)":388,"Broker":"Avanti Way Realty LLC","Zillow URL":"https://www.zillow.com/homedetails/7801-SW-9th-Ter-Miami-FL-33144/44184129_zpid/","ZPID":"44184129","Home Type":"SINGLE_FAMILY"},{"Full Address":"8500 SW 16th St, Miami, FL 33155","Street":"8500 SW 16th St","City":"Miami","State":"FL","ZIP Code":"33155","Beds":3,"Baths":2.0,"Sq Ft":1302,"Sale Date":"2026-04-24","Sale Month":"2026-04","Sold Price ($)":680000.0,"Zestimate ($)":680000,"Price Change ($)":-15001,"Price/SqFt ($)":522,"Broker":"AB Realty, LLC","Zillow URL":"https://www.zillow.com/homedetails/8500-SW-16th-St-Miami-FL-33155/44183553_zpid/","ZPID":"44183553","Home Type":"SINGLE_FAMILY"},{"Full Address":"1901 SW 97th Ave, Miami, FL 33165","Street":"1901 SW 97th Ave","City":"Miami","State":"FL","ZIP Code":"33165","Beds":3,"Baths":2.0,"Sq Ft":2071,"Sale Date":"2026-04-28","Sale Month":"2026-04","Sold Price ($)":800000.0,"Zestimate ($)":797900,"Price Change ($)":null,"Price/SqFt ($)":386,"Broker":"","Zillow URL":"https://www.zillow.com/homedetails/1901-SW-97th-Ave-Miami-FL-33165/44181285_zpid/","ZPID":"44181285","Home Type":"SINGLE_FAMILY"},{"Full Address":"8930 SW 38th Street, Miami, FL 33165","Street":"8930 SW 38th Street","City":"Miami","State":"FL","ZIP Code":"33165","Beds":4,"Baths":4.0,"Sq Ft":2009,"Sale Date":"2026-05-01","Sale Month":"2026-05","Sold Price ($)":690000.0,"Zestimate ($)":689900,"Price Change ($)":null,"Price/SqFt ($)":343,"Broker":"Blue Lighthouse Realty, INC","Zillow URL":"https://www.zillow.com/homedetails/8930-SW-38th-St-Miami-FL-33165/44192783_zpid/","ZPID":"44192783","Home Type":"SINGLE_FAMILY"},{"Full Address":"9361 SW 16th St, Miami, FL 33165","Street":"9361 SW 16th St","City":"Miami","State":"FL","ZIP Code":"33165","Beds":4,"Baths":3.0,"Sq Ft":1874,"Sale Date":"2026-05-04","Sale Month":"2026-05","Sold Price ($)":800000.0,"Zestimate ($)":799900,"Price Change ($)":null,"Price/SqFt ($)":427,"Broker":"Compass Florida, LLC","Zillow URL":"https://www.zillow.com/homedetails/9361-SW-16th-St-Miami-FL-33165/44181006_zpid/","ZPID":"44181006","Home Type":"SINGLE_FAMILY"},{"Full Address":"1550 SW 89th Ct, Miami, FL 33174","Street":"1550 SW 89th Ct","City":"Miami","State":"FL","ZIP Code":"33174","Beds":4,"Baths":3.0,"Sq Ft":2011,"Sale Date":"2026-05-07","Sale Month":"2026-05","Sold Price ($)":1160000.0,"Zestimate ($)":1159900,"Price Change ($)":null,"Price/SqFt ($)":577,"Broker":"Luxe Properties","Zillow URL":"https://www.zillow.com/homedetails/1550-SW-89th-Ct-Miami-FL-33174/247700067_zpid/","ZPID":"247700067","Home Type":"SINGLE_FAMILY"},{"Full Address":"1310 SW 78th Ave, Miami, FL 33144","Street":"1310 SW 78th Ave","City":"Miami","State":"FL","ZIP Code":"33144","Beds":3,"Baths":2.0,"Sq Ft":1960,"Sale Date":"2026-05-12","Sale Month":"2026-05","Sold Price ($)":785000.0,"Zestimate ($)":784900,"Price Change ($)":null,"Price/SqFt ($)":401,"Broker":"Avenue Homes LLC","Zillow URL":"https://www.zillow.com/homedetails/1310-SW-78th-Ave-Miami-FL-33144/44183806_zpid/","ZPID":"44183806","Home Type":"SINGLE_FAMILY"},{"Full Address":"8571 SW 30th St, Miami, FL 33155","Street":"8571 SW 30th St","City":"Miami","State":"FL","ZIP Code":"33155","Beds":4,"Baths":3.0,"Sq Ft":2408,"Sale Date":"2026-05-15","Sale Month":"2026-05","Sold Price ($)":700000.0,"Zestimate ($)":699500,"Price Change ($)":null,"Price/SqFt ($)":291,"Broker":"Epic Choice Realty","Zillow URL":"https://www.zillow.com/homedetails/8571-SW-30th-St-Miami-FL-33155/44192222_zpid/","ZPID":"44192222","Home Type":"SINGLE_FAMILY"},{"Full Address":"8341 SW 27th Ln, Miami, FL 33155","Street":"8341 SW 27th Ln","City":"Miami","State":"FL","ZIP Code":"33155","Beds":3,"Baths":2.0,"Sq Ft":1203,"Sale Date":"2026-05-18","Sale Month":"2026-05","Sold Price ($)":770000.0,"Zestimate ($)":769700,"Price Change ($)":null,"Price/SqFt ($)":640,"Broker":"Miami New Realty","Zillow URL":"https://www.zillow.com/homedetails/8341-SW-27th-Ln-Miami-FL-33155/44190989_zpid/","ZPID":"44190989","Home Type":"SINGLE_FAMILY"},{"Full Address":"2941 SW 97th Avenue, Miami, FL 33165","Street":"2941 SW 97th Avenue","City":"Miami","State":"FL","ZIP Code":"33165","Beds":3,"Baths":2.0,"Sq Ft":1495,"Sale Date":"2026-05-19","Sale Month":"2026-05","Sold Price ($)":630000.0,"Zestimate ($)":629800,"Price Change ($)":null,"Price/SqFt ($)":421,"Broker":"Silver Palms Real Estate","Zillow URL":"https://www.zillow.com/homedetails/2941-SW-97th-Ave-Miami-FL-33165/44194585_zpid/","ZPID":"44194585","Home Type":"SINGLE_FAMILY"},{"Full Address":"8631 SW 16th Ter, Miami, FL 33155","Street":"8631 SW 16th Ter","City":"Miami","State":"FL","ZIP Code":"33155","Beds":4,"Baths":3.0,"Sq Ft":2218,"Sale Date":"2026-05-20","Sale Month":"2026-05","Sold Price ($)":875000.0,"Zestimate ($)":874800,"Price Change ($)":null,"Price/SqFt ($)":394,"Broker":"BRKRS","Zillow URL":"https://www.zillow.com/homedetails/8631-SW-16th-Ter-Miami-FL-33155/44183576_zpid/","ZPID":"44183576","Home Type":"SINGLE_FAMILY"},{"Full Address":"1900 SW 87th Ct, Miami, FL 33165","Street":"1900 SW 87th Ct","City":"Miami","State":"FL","ZIP Code":"33165","Beds":3,"Baths":2.0,"Sq Ft":1851,"Sale Date":"2026-05-22","Sale Month":"2026-05","Sold Price ($)":835000.0,"Zestimate ($)":818000,"Price Change ($)":null,"Price/SqFt ($)":451,"Broker":"Met Real Estate Corp.","Zillow URL":"https://www.zillow.com/homedetails/1900-SW-87th-Ct-Miami-FL-33165/44180571_zpid/","ZPID":"44180571","Home Type":"SINGLE_FAMILY"},{"Full Address":"3235 SW 93rd Ct, Miami, FL 33165","Street":"3235 SW 93rd Ct","City":"Miami","State":"FL","ZIP Code":"33165","Beds":4,"Baths":3.0,"Sq Ft":1928,"Sale Date":"2026-05-26","Sale Month":"2026-05","Sold Price ($)":650000.0,"Zestimate ($)":681000,"Price Change ($)":null,"Price/SqFt ($)":337,"Broker":"Luxe Properties","Zillow URL":"https://www.zillow.com/homedetails/3235-SW-93rd-Ct-Miami-FL-33165/44194130_zpid/","ZPID":"44194130","Home Type":"SINGLE_FAMILY"},{"Full Address":"3240 SW 96th Ave, Miami, FL 33165","Street":"3240 SW 96th Ave","City":"Miami","State":"FL","ZIP Code":"33165","Beds":3,"Baths":2.0,"Sq Ft":1618,"Sale Date":"2026-05-26","Sale Month":"2026-05","Sold Price ($)":675000.0,"Zestimate ($)":652000,"Price Change ($)":null,"Price/SqFt ($)":417,"Broker":"BHHS EWM Realty","Zillow URL":"https://www.zillow.com/homedetails/3240-SW-96th-Ave-Miami-FL-33165/44194027_zpid/","ZPID":"44194027","Home Type":"SINGLE_FAMILY"}];
+
+// ============================================================
+// STATE
+// ============================================================
+let activeData = BASE_DATA.slice();
+let uploadedData = null;
+let selectedMonth = 'all';
+let sortCol = 'Sale Date';
+let sortDir = -1; // -1 = desc
+
+// ============================================================
+// UTILS
+// ============================================================
+const fmt = n => n == null ? '—' : '$' + Math.round(n).toLocaleString();
+const fmtK = n => n == null ? '—' : '$' + (n >= 1e6 ? (n/1e6).toFixed(1)+'M' : (n/1e3).toFixed(0)+'K');
+const fmtN = n => n == null ? '—' : Math.round(n).toLocaleString();
+
+function median(arr) {
+  if (!arr.length) return null;
+  const s = arr.slice().sort((a,b)=>a-b);
+  const m = Math.floor(s.length/2);
+  return s.length%2 ? s[m] : (s[m-1]+s[m])/2;
+}
+function avg(arr) {
+  if (!arr.length) return null;
+  return arr.reduce((a,b)=>a+b,0)/arr.length;
+}
+function delta(cur, prev, invert=false) {
+  if (cur==null||prev==null||prev===0) return '<span class="neutral">—</span>';
+  const pct = (cur-prev)/prev*100;
+  const dir = invert ? pct<0 : pct>0;
+  const cls = dir ? 'up' : (pct===0 ? 'neutral' : 'down');
+  return `<span class="${cls}">${pct>0?'+':''}${pct.toFixed(1)}%</span>`;
+}
+
+function getFiltered() {
+  const src = (uploadedData ? uploadedData.concat(BASE_DATA) : BASE_DATA);
+  if (selectedMonth==='all') return src;
+  return src.filter(r => r['Sale Month']===selectedMonth);
+}
+
+// ============================================================
+// MONTH CHIPS
+// ============================================================
+function buildChips() {
+  const months = [...new Set(BASE_DATA.map(r=>r['Sale Month']))].sort();
+  const wrap = document.getElementById('month-chips');
+  wrap.innerHTML = '';
+  const allChip = document.createElement('span');
+  allChip.className = 'chip all active';
+  allChip.textContent = 'All Months';
+  allChip.onclick = () => selectMonth('all');
+  allChip.id = 'chip-all';
+  wrap.appendChild(allChip);
+  months.forEach(m => {
+    const c = document.createElement('span');
+    c.className = 'chip';
+    c.textContent = m;
+    c.id = 'chip-'+m;
+    c.onclick = () => selectMonth(m);
+    wrap.appendChild(c);
+  });
+}
+
+function selectMonth(m) {
+  selectedMonth = m;
+  document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+  const target = document.getElementById('chip-'+(m==='all'?'all':m));
+  if (target) target.classList.add('active');
+  updateAll();
+}
+
+// ============================================================
+// KPIs
+// ============================================================
+function updateKPIs(data) {
+  const armLen = data.filter(r=>r['Sold Price ($)']>=200000);
+  const prices = armLen.map(r=>r['Sold Price ($)']);
+  const allPrices = data.map(r=>r['Sold Price ($)']);
+  const ppsf = data.map(r=>r['Price/SqFt ($)']).filter(v=>v!=null);
+  const cuts = data.filter(r=>r['Price Change ($)']!=null&&r['Price Change ($)']<0);
+  const hasCut = data.filter(r=>r['Price Change ($)']!=null);
+  
+  document.getElementById('kpi-total').textContent = data.length;
+  document.getElementById('kpi-median').textContent = fmt(median(prices));
+  document.getElementById('kpi-avg').textContent = fmt(avg(prices));
+  document.getElementById('kpi-ppsf').textContent = ppsf.length ? '$'+Math.round(avg(ppsf)) : '—';
+  document.getElementById('kpi-volume').textContent = fmtK(allPrices.reduce((a,b)=>a+b,0));
+  document.getElementById('kpi-cut').textContent = hasCut.length ? Math.round(cuts.length/hasCut.length*100)+'%' : '—';
+  document.getElementById('kpi-cut-sub').textContent = hasCut.length ? `${cuts.length} of ${hasCut.length} w/ price data` : 'no price change data';
+}
+
+// ============================================================
+// MOM STRIP
+// ============================================================
+function updateMoM(data) {
+  const months = [...new Set(BASE_DATA.map(r=>r['Sale Month']))].sort();
+  const lastTwo = months.slice(-2);
+  if (lastTwo.length < 2) return;
+  const [prev, cur] = lastTwo;
+  
+  const curData = BASE_DATA.filter(r=>r['Sale Month']===cur);
+  const prevData = BASE_DATA.filter(r=>r['Sale Month']===prev);
+  
+  function stats(d) {
+    const p = d.filter(r=>r['Sold Price ($)']>=200000).map(r=>r['Sold Price ($)']);
+    const pp = d.map(r=>r['Price/SqFt ($)']).filter(v=>v!=null);
+    return { n: d.length, med: median(p), avg: avg(p), ppsf: avg(pp) };
+  }
+  const cs = stats(curData), ps = stats(prevData);
+  
+  document.getElementById('mom-label').textContent = `${prev} vs ${cur}`;
+  
+  const items = [
+    { label: 'Sales Count', cur: cs.n, prev: ps.n, fmt: v=>v, invert: false },
+    { label: 'Median Price', cur: cs.med, prev: ps.med, fmt: fmt, invert: false },
+    { label: 'Avg Price', cur: cs.avg, prev: ps.avg, fmt: fmt, invert: false },
+    { label: 'Avg $/SqFt', cur: cs.ppsf, prev: ps.ppsf, fmt: v=>v?'$'+Math.round(v):'—', invert: false },
+  ];
+  
+  const grid = document.getElementById('mom-grid');
+  grid.innerHTML = items.map(item => `
+    <div class="mom-cell">
+      <div class="mom-label">${item.label}</div>
+      <div class="mom-val">${item.fmt(item.cur)}</div>
+      <div class="mom-delta">${delta(item.cur, item.prev, item.invert)} vs ${prev}</div>
+    </div>
+  `).join('');
+}
+
+// ============================================================
+// CHARTS
+// ============================================================
+let charts = {};
+const MONTHS_ALL = [...new Set(BASE_DATA.map(r=>r['Sale Month']))].sort();
+
+function monthStats(month) {
+  const d = BASE_DATA.filter(r=>r['Sale Month']===month);
+  const armLen = d.filter(r=>r['Sold Price ($)']>=200000);
+  const prices = armLen.map(r=>r['Sold Price ($)']);
+  const ppsf = d.map(r=>r['Price/SqFt ($)']).filter(v=>v!=null);
+  return {
+    n: d.length,
+    med: median(prices),
+    avg: avg(prices),
+    ppsf: avg(ppsf)
+  };
+}
+
+function buildCharts(data) {
+  const labels = MONTHS_ALL.map(m => m.slice(5)+'/'+m.slice(2,4));
+  const meds = MONTHS_ALL.map(m => monthStats(m).med);
+  const avgs = MONTHS_ALL.map(m => monthStats(m).avg);
+  const vols = MONTHS_ALL.map(m => monthStats(m).n);
+  const ppsfArr = MONTHS_ALL.map(m => monthStats(m).ppsf ? Math.round(monthStats(m).ppsf) : null);
+
+  const gridColor = '#2a2e42';
+  const tickColor = '#8891b4';
+  const baseOpts = {
+    responsive: true, maintainAspectRatio: true,
+    plugins: { legend: { labels: { color: tickColor, font:{size:11} } }, tooltip: { callbacks: {} } },
+    scales: {
+      x: { grid:{color:gridColor}, ticks:{color:tickColor,font:{size:10}} },
+      y: { grid:{color:gridColor}, ticks:{color:tickColor,font:{size:10}} }
+    }
+  };
+
+  // Price chart
+  if (charts.price) charts.price.destroy();
+  charts.price = new Chart(document.getElementById('chart-price'), {
+    type:'line',
+    data: {
+      labels,
+      datasets: [
+        { label:'Median', data:meds, borderColor:'#6c8ef5', backgroundColor:'rgba(108,142,245,0.1)', tension:0.3, fill:true, pointRadius:4 },
+        { label:'Average', data:avgs, borderColor:'#4ecdc4', backgroundColor:'rgba(78,205,196,0.05)', tension:0.3, fill:false, pointRadius:3, borderDash:[4,3] }
+      ]
+    },
+    options: { ...baseOpts, plugins: { ...baseOpts.plugins, tooltip: { callbacks: { label: ctx => ' $'+Math.round(ctx.raw).toLocaleString() } } },
+      scales: { ...baseOpts.scales, y: { ...baseOpts.scales.y, ticks: { ...baseOpts.scales.y.ticks, callback: v=>'$'+(v/1000).toFixed(0)+'K' } } }
+    }
+  });
+
+  // Volume chart
+  if (charts.volume) charts.volume.destroy();
+  charts.volume = new Chart(document.getElementById('chart-volume'), {
+    type:'bar',
+    data: {
+      labels,
+      datasets: [{ label:'Closed Sales', data:vols, backgroundColor:'rgba(108,142,245,0.7)', borderColor:'#6c8ef5', borderWidth:1, borderRadius:4 }]
+    },
+    options: { ...baseOpts, plugins: { ...baseOpts.plugins, legend:{display:false} } }
+  });
+
+  // $/sqft line
+  if (charts.ppsf) charts.ppsf.destroy();
+  charts.ppsf = new Chart(document.getElementById('chart-ppsf'), {
+    type:'line',
+    data: {
+      labels,
+      datasets: [{ label:'Avg $/SqFt', data:ppsfArr, borderColor:'#f7b731', backgroundColor:'rgba(247,183,49,0.1)', tension:0.3, fill:true, pointRadius:4 }]
+    },
+    options: { ...baseOpts, plugins:{...baseOpts.plugins,legend:{display:false}},
+      scales:{...baseOpts.scales, y:{...baseOpts.scales.y, ticks:{...baseOpts.scales.y.ticks, callback: v=>'$'+v}}}
+    }
+  });
+
+  // Price distribution
+  const bins = [
+    {label:'<$400K', min:0, max:400000},
+    {label:'$400–500K', min:400000, max:500000},
+    {label:'$500–600K', min:500000, max:600000},
+    {label:'$600–700K', min:600000, max:700000},
+    {label:'$700–800K', min:700000, max:800000},
+    {label:'$800–900K', min:800000, max:900000},
+    {label:'$900K–1M', min:900000, max:1000000},
+    {label:'>$1M', min:1000000, max:Infinity},
+  ];
+  const binCounts = bins.map(b => data.filter(r=>r['Sold Price ($)']>=b.min&&r['Sold Price ($)']<b.max).length);
+  const binColors = binCounts.map((_,i)=>`hsla(${220+i*10},70%,60%,0.75)`);
+  if (charts.dist) charts.dist.destroy();
+  charts.dist = new Chart(document.getElementById('chart-dist'), {
+    type:'bar',
+    data: { labels:bins.map(b=>b.label), datasets:[{label:'Sales',data:binCounts,backgroundColor:binColors,borderRadius:3}] },
+    options:{...baseOpts, indexAxis:'y', plugins:{...baseOpts.plugins,legend:{display:false}},
+      scales:{x:{...baseOpts.scales.x,ticks:{...baseOpts.scales.x.ticks,callback:v=>Math.round(v)}}, y:{...baseOpts.scales.y}}}
+  });
+
+  // Beds donut
+  const bedCounts = {};
+  data.forEach(r=>{ const b=r['Beds']; if(b!=null){bedCounts[b]=(bedCounts[b]||0)+1;} });
+  const bedLabels = Object.keys(bedCounts).sort((a,b)=>a-b);
+  const bedVals = bedLabels.map(b=>bedCounts[b]);
+  const donutColors = ['#6c8ef5','#4ecdc4','#f7b731','#ff6b6b','#a29bfe','#fd79a8'];
+  if (charts.beds) charts.beds.destroy();
+  charts.beds = new Chart(document.getElementById('chart-beds'), {
+    type:'doughnut',
+    data:{ labels:bedLabels.map(b=>b+' bd'), datasets:[{data:bedVals,backgroundColor:donutColors,borderWidth:2,borderColor:'#1a1d27'}] },
+    options:{ responsive:true, maintainAspectRatio:true, plugins:{
+      legend:{labels:{color:tickColor,font:{size:11},padding:10}, position:'bottom'},
+      tooltip:{callbacks:{label:ctx=>` ${ctx.label}: ${ctx.raw} (${Math.round(ctx.raw/data.length*100)}%)`}}
+    }}
+  });
+}
+
+// ============================================================
+// TABLE
+// ============================================================
+function sortTable(col) {
+  if (sortCol===col) { sortDir *= -1; }
+  else { sortCol=col; sortDir=-1; }
+  document.querySelectorAll('thead th').forEach(th => {
+    th.classList.remove('sort-asc','sort-desc');
+    if (th.dataset.col===col) th.classList.add(sortDir===1?'sort-asc':'sort-desc');
+  });
+  renderTable();
+}
+
+function renderTable() {
+  const q = document.getElementById('search-input').value.toLowerCase();
+  let data = getFiltered();
+  if (q) data = data.filter(r =>
+    (r['Full Address']||'').toLowerCase().includes(q) ||
+    (r['Broker']||'').toLowerCase().includes(q) ||
+    (r['ZIP Code']||'').includes(q)
+  );
+  data = data.slice().sort((a,b)=>{
+    let va=a[sortCol], vb=b[sortCol];
+    if (va==null&&vb==null) return 0;
+    if (va==null) return 1; if (vb==null) return -1;
+    if (typeof va==='string') return va.localeCompare(vb)*sortDir;
+    return (va-vb)*sortDir;
+  });
+  
+  const tbody = document.getElementById('table-body');
+  tbody.innerHTML = data.map(r => {
+    const distressed = r['Sold Price ($)'] < 200000;
+    const priceClass = distressed ? 'class="distressed"' : '';
+    const badge = distressed ? '<span class="badge-distressed">distressed</span>' : '';
+    const zestDiff = r['Zestimate ($)'] && r['Sold Price ($)'] ? r['Sold Price ($)'] - r['Zestimate ($)'] : null;
+    const zestStr = r['Zestimate ($)'] ? fmt(r['Zestimate ($)']) + (zestDiff!=null ? `<br><small style="color:${zestDiff>=0?'#4caf50':'#f44336'}">${zestDiff>=0?'+':''}${(zestDiff/r['Zestimate ($)']*100).toFixed(1)}%</small>` : '') : '—';
+    const pcStr = r['Price Change ($)'] != null ? `<span style="color:${r['Price Change ($)']<0?'#f44336':'#4caf50'}">${r['Price Change ($)']>=0?'+':''}${fmt(r['Price Change ($)'])}</span>` : '—';
+    const link = r['Zillow URL'] ? `<a href="${r['Zillow URL']}" target="_blank" rel="noopener">↗</a>` : '—';
+    return `<tr>
+      <td>${r['Sale Date']||'—'}</td>
+      <td ${priceClass}>${r['Street']||r['Full Address']||'—'}${badge}<br><small style="color:var(--muted)">${r['ZIP Code']||''}</small></td>
+      <td ${priceClass}>${fmt(r['Sold Price ($)'])}</td>
+      <td>${r['Beds']??'—'}</td>
+      <td>${r['Baths']??'—'}</td>
+      <td>${r['Sq Ft']?r['Sq Ft'].toLocaleString():'—'}</td>
+      <td>${r['Price/SqFt ($)']?'$'+r['Price/SqFt ($)'].toLocaleString():'—'}</td>
+      <td>${zestStr}</td>
+      <td>${pcStr}</td>
+      <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis">${r['Broker']||'—'}</td>
+      <td>${link}</td>
+    </tr>`;
+  }).join('');
+  
+  document.getElementById('table-count').textContent = `(${data.length})`;
+  document.getElementById('table-footer').textContent = `Showing ${data.length} listings${q?' matching "'+q+'"':''}`;
+}
+
+// ============================================================
+// AFFORDABILITY CALCULATOR
+// ============================================================
+let dpPct = 20, termYr = 30;
+
+function setAffordPrice(p) {
+  document.getElementById('price-slider').value = p;
+  updateAfford();
+}
+function syncRate() {
+  const v = parseFloat(document.getElementById('rate-slider').value);
+  document.getElementById('rate-input').value = v.toFixed(2);
+  updateAfford();
+}
+function setDP(pct) {
+  dpPct = pct;
+  document.querySelectorAll('.dp-chip').forEach(c => c.classList.toggle('active', parseInt(c.dataset.pct)===pct));
+  updateAfford();
+}
+function setTerm(yr) {
+  termYr = yr;
+  document.getElementById('term30').classList.toggle('active', yr===30);
+  document.getElementById('term15').classList.toggle('active', yr===15);
+  const rate = termYr===15 ? 5.72 : parseFloat(document.getElementById('rate-input').value);
+  if (yr===15) { document.getElementById('rate-input').value = '5.72'; document.getElementById('rate-slider').value = '5.72'; }
+  updateAfford();
+}
+function updateAfford() {
+  const price = parseFloat(document.getElementById('price-slider').value);
+  const rate = parseFloat(document.getElementById('rate-input').value);
+  document.getElementById('rate-slider').value = rate;
+  document.getElementById('price-display').textContent = '$' + Math.round(price).toLocaleString();
+  
+  const dp = price * dpPct / 100;
+  const loan = price - dp;
+  const r = rate / 100 / 12;
+  const n = termYr * 12;
+  const pi = r===0 ? loan/n : loan * r * Math.pow(1+r,n) / (Math.pow(1+r,n)-1);
+  
+  // Tax: (price * 0.80) * 16.9487 / 1000 / 12
+  const annualTax = price * 0.80 * 16.9487 / 1000;
+  const monthlyTax = annualTax / 12;
+  
+  // Insurance: inland non-coastal model
+  const dwelling = price * 0.65;
+  const baseIns = 5500;
+  const addlIns = Math.max(0, (dwelling - 300000) / 1000 * 8);
+  const annualIns = baseIns + addlIns;
+  const monthlyIns = annualIns / 12;
+  
+  const piti = pi + monthlyTax + monthlyIns;
+  
+  document.getElementById('out-dp').textContent = '$'+Math.round(dp).toLocaleString()+' ('+dpPct+'%)';
+  document.getElementById('out-loan').textContent = '$'+Math.round(loan).toLocaleString();
+  document.getElementById('out-pi').textContent = '$'+Math.round(pi).toLocaleString()+'/mo';
+  document.getElementById('out-tax').textContent = '$'+Math.round(monthlyTax).toLocaleString()+'/mo';
+  document.getElementById('out-ins').textContent = '$'+Math.round(monthlyIns).toLocaleString()+'/mo';
+  document.getElementById('out-piti').textContent = '$'+Math.round(piti).toLocaleString()+'/mo';
+}
+
+// ============================================================
+// CSV UPLOAD PREVIEW
+// ============================================================
+document.getElementById('csv-upload').addEventListener('change', function(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  document.getElementById('upload-status').textContent = 'Parsing ' + file.name + '…';
+  Papa.parse(file, {
+    header: true, skipEmptyLines: true,
+    complete: function(res) {
+      const rows = res.data;
+      let parsed = [];
+      rows.forEach(r => {
+        try {
+          const price = parseFloat(r['unformattedPrice']||r['soldPrice']?.replace(/[$,KMkm]/g,'')||0);
+          const dateSold = r['hdpData/homeInfo/dateSold'];
+          if (!dateSold || !price) return;
+          const saleDate = new Date(parseFloat(dateSold)).toISOString().slice(0,10);
+          const sqft = parseFloat(r['area']||r['hdpData/homeInfo/livingArea'])||null;
+          const ppsf = sqft && price/sqft<=1500 ? Math.round(price/sqft) : null;
+          parsed.push({
+            'Full Address': r['address']||'',
+            'Street': r['addressStreet']||r['hdpData/homeInfo/streetAddress']||'',
+            'City': r['addressCity']||'',
+            'State': r['addressState']||'',
+            'ZIP Code': String(r['addressZipcode']||'').padStart(5,'0'),
+            'Beds': parseInt(r['beds']||r['hdpData/homeInfo/bedrooms'])||null,
+            'Baths': parseFloat(r['baths']||r['hdpData/homeInfo/bathrooms'])||null,
+            'Sq Ft': sqft,
+            'Sale Date': saleDate,
+            'Sale Month': saleDate.slice(0,7),
+            'Sold Price ($)': price,
+            'Zestimate ($)': parseFloat(r['zestimate']||r['hdpData/homeInfo/zestimate'])||null,
+            'Price Change ($)': parseFloat(r['hdpData/homeInfo/priceChange'])||null,
+            'Price/SqFt ($)': ppsf,
+            'Broker': r['brokerName']||'',
+            'Zillow URL': r['detailUrl']||'',
+            'ZPID': r['zpid']||r['hdpData/homeInfo/zpid']||'',
+          });
+        } catch(err){}
+      });
+      // Dedup: remove from parsed anything already in BASE_DATA by ZPID
+      const existingZPIDs = new Set(BASE_DATA.map(r=>String(r['ZPID'])));
+      const newOnly = parsed.filter(r => !existingZPIDs.has(String(r['ZPID'])));
+      uploadedData = newOnly;
+      document.getElementById('stale-banner').style.display = 'block';
+      document.getElementById('upload-status').textContent = `✓ ${file.name} — ${newOnly.length} new listings found (${parsed.length} total in CSV, ${parsed.length-newOnly.length} already in dataset). Commentary is stale — regenerate with Claude.`;
+      // Rebuild chips to include new months
+      const allMonths = [...new Set([...BASE_DATA, ...newOnly].map(r=>r['Sale Month']))].sort();
+      buildChips();
+      selectMonth('all');
+    }
+  });
+});
+
+// ============================================================
+// MAIN UPDATE
+// ============================================================
+function updateAll() {
+  const data = getFiltered();
+  updateKPIs(data);
+  renderTable();
+  // Charts always show full BASE_DATA (all months)
+  buildCharts(BASE_DATA);
+  updateMoM(BASE_DATA);
+}
+
+// ============================================================
+// INIT
+// ============================================================
+buildChips();
+buildCharts(BASE_DATA);
+updateMoM(BASE_DATA);
+updateKPIs(BASE_DATA);
+renderTable();
+updateAfford();
+</script>
+</body>
+</html>
